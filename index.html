@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Panel odontológico</title>
+<style>
+  :root{
+    --bg:#F4F6F5; --surface:#FFFFFF; --ink:#13201E; --ink-soft:#5C6B68;
+    --line:#D8E0DE; --teal:#0E6B65; --teal-dark:#0A4F4B;
+    --caries:#D6472E; --tratado:#2659C7; --sano:#EDF1F0;
+    --warn:#B9790A;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  h1,h2,h3{ margin:0; }
+  .app-header{
+    position:sticky; top:0; z-index:5;
+    background:var(--surface); border-bottom:1px solid var(--line);
+    padding-top:env(safe-area-inset-top,0px);
+  }
+  .app-header-inner{
+    max-width:1100px; margin:0 auto; padding:14px 18px 0;
+  }
+  .brand{ font-size:17px; font-weight:700; }
+  .brand span{ color:var(--teal); }
+  .sync-indicator{
+    display:inline-block; font-size:11px; font-weight:600; color:var(--ink-soft) !important;
+    background:var(--sano); padding:3px 9px; border-radius:999px; margin-left:8px; vertical-align:middle;
+  }
+  .sync-indicator.pendiente{ background:#FBEBD2; color:var(--warn) !important; }
+  .tabs{
+    display:flex; gap:4px; margin-top:12px; overflow-x:auto;
+  }
+  .tab-btn{
+    padding:10px 16px; border:none; background:transparent; color:var(--ink-soft);
+    font-size:14px; font-weight:600; border-bottom:2px solid transparent; cursor:pointer;
+    white-space:nowrap;
+  }
+  .tab-btn.active{ color:var(--teal-dark); border-bottom-color:var(--teal); }
+
+  main{ max-width:1100px; margin:0 auto; padding:22px 18px 60px; }
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:18px; margin-bottom:18px;
+  }
+  .card h2{ font-size:16px; margin-bottom:4px; }
+  .card .hint{ font-size:13px; color:var(--ink-soft); margin:4px 0 14px; line-height:1.5; }
+
+  .field-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:12px;
+  }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .field input[type="text"], .field input[type="number"], .field input[type="date"],
+  .field input[type="time"], .field input[type="tel"], .field select, .field textarea{
+    padding:9px 11px; border-radius:8px; border:1px solid var(--line);
+    font-size:14.5px; background:var(--surface); color:var(--ink); width:100%;
+  }
+  .field textarea{ resize:vertical; min-height:64px; font-family:inherit; }
+  .checkline{
+    display:flex; align-items:center; gap:7px; font-size:13.5px; color:var(--ink);
+  }
+  .checkline input{ width:16px; height:16px; }
+  .check-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:10px 14px;
+    margin-top:4px;
+  }
+
+  .section-title{ font-size:13px; font-weight:700; color:var(--teal-dark); margin:18px 0 8px; }
+  .section-title:first-child{ margin-top:0; }
+
+  button{
+    padding:11px 16px; border-radius:9px; border:1px solid var(--line);
+    background:var(--surface); color:var(--ink); font-size:14px; font-weight:600; cursor:pointer;
+  }
+  button.primary{ background:var(--teal); border-color:var(--teal); color:#fff; }
+  button.danger{ color:#B3261E; border-color:#F0C9C5; }
+  button:active{ transform:translateY(1px); }
+  .btn-row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:14px; }
+  th{ text-align:left; font-size:12px; color:var(--ink-soft); padding:8px 10px; border-bottom:1px solid var(--line); }
+  td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr:last-child td{ border-bottom:none; }
+  .empty-row{ color:var(--ink-soft); font-size:13.5px; padding:16px 0; }
+
+  .badge{
+    display:inline-block; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:999px;
+  }
+  .badge.pendiente{ background:#FBEBD2; color:var(--warn); }
+  .badge.completada{ background:#DCEEEC; color:var(--teal-dark); }
+  .badge.cancelada{ background:#F3DEDC; color:#B3261E; }
+
+  .patient-picker{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .patient-picker select{ padding:9px 11px; border-radius:8px; border:1px solid var(--line); font-size:14.5px; min-width:220px; }
+  .patient-summary{ display:flex; gap:18px; flex-wrap:wrap; font-size:13.5px; color:var(--ink-soft); }
+  .patient-summary b{ color:var(--ink); }
+
+  /* Odontograma */
+  .arch-label{ font-size:13px; font-weight:600; color:var(--ink-soft); margin:14px 0 8px; }
+  .arch-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:6px; }
+  .arch-row{ display:flex; gap:7px; width:max-content; }
+  .quadrant-gap{ width:1px; background:var(--line); margin:0 5px; align-self:stretch; }
+  .tooth-card{ display:flex; flex-direction:column; align-items:center; gap:3px; width:80px; flex:0 0 auto; }
+  .tooth-number{ font-size:11.5px; font-weight:600; color:var(--ink-soft); }
+  .tooth-card.has-marks .tooth-number{ color:var(--teal-dark); }
+  .tooth-svg{ width:80px; height:80px; touch-action:none; }
+  .zone{ cursor:pointer; transition:fill 120ms ease; }
+  .zone:active{ opacity:0.85; }
+  .zone-label{ font-size:30px; font-weight:600; fill:var(--ink-soft); pointer-events:none; user-select:none; }
+  .zone-label.on-dark{ fill:#fff; }
+  .legend{ display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; }
+  .legend-item{ display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-soft); }
+  .swatch{ width:13px; height:13px; border-radius:4px; border:1px solid var(--line); }
+  .swatch.caries{ background:var(--caries); border-color:var(--caries); }
+  .swatch.tratado{ background:var(--tratado); border-color:var(--tratado); }
+  .swatch.sano{ background:var(--sano); }
+
+  /* Fidelizacion */
+  .loyalty-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+  .loyalty-dot{
+    width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700; background:var(--sano); color:var(--ink-soft); border:1px solid var(--line);
+  }
+  .loyalty-dot.filled{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .loyalty-dot.reward{ background:#FBEBD2; color:var(--warn); border-color:#F0D9AC; }
+
+  .photo-preview{ max-width:160px; border-radius:8px; margin-top:8px; border:1px solid var(--line); }
+
+  .hidden{ display:none !important; }
+
+  .print-area{ display:none; }
+  @media print{
+    body > *:not(.print-area){ display:none !important; }
+    .print-area{ display:block !important; padding:20px; }
+    .print-area h2{ margin-bottom:4px; }
+    .print-area .pline{ margin:4px 0; font-size:14px; }
+  }
+
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#10201D; --surface:#17302B; --ink:#EAF2F0; --ink-soft:#9BB0AC;
+      --line:#274641; --sano:#1F3B35;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#10201D; --surface:#17302B; --ink:#EAF2F0; --ink-soft:#9BB0AC;
+    --line:#274641; --sano:#1F3B35;
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <div class="brand">Panel <span>odontológico</span> <span class="sync-indicator" id="syncIndicator">Todo sincronizado</span></div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="pacientes">Pacientes</button>
+      <button class="tab-btn" data-tab="agenda">Agenda</button>
+      <button class="tab-btn" data-tab="historia">Historia clínica</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <!-- ================= PACIENTES ================= -->
+  <section id="view-pacientes" class="view active">
+    <div class="card">
+      <h2>Nuevo paciente</h2>
+      <p class="hint">Datos generales de la ficha. El resto (antecedentes, signos vitales, examen) se completa en Historia clínica.</p>
+      <div class="field-grid">
+        <div class="field"><label>Nombre</label><input type="text" id="np-nombre"></div>
+        <div class="field"><label>Sexo</label>
+          <select id="np-sexo"><option value="">—</option><option>Femenino</option><option>Masculino</option></select>
+        </div>
+        <div class="field"><label>Edad</label><input type="number" id="np-edad" min="0"></div>
+        <div class="field"><label>C.I. / Pasaporte</label><input type="text" id="np-ci"></div>
+        <div class="field"><label>Teléfono</label><input type="tel" id="np-telefono"></div>
+        <div class="field"><label>Fecha de nacimiento</label><input type="date" id="np-nacimiento"></div>
+      </div>
+      <div class="btn-row">
+        <button class="primary" id="btnGuardarPaciente">Guardar paciente</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Pacientes registrados</h2>
+      <table>
+        <thead><tr><th>Nombre</th><th>Edad</th><th>Teléfono</th><th>Enlace WhatsApp</th><th></th></tr></thead>
+        <tbody id="tablaPacientes"></tbody>
+      </table>
+      <p class="empty-row hidden" id="pacientesVacio">Aún no hay pacientes registrados.</p>
+    </div>
+  </section>
+
+  <!-- ================= AGENDA ================= -->
+  <section id="view-agenda" class="view">
+    <div class="card">
+      <h2>Nueva cita</h2>
+      <div class="field-grid">
+        <div class="field"><label>Paciente</label><select id="ac-paciente"></select></div>
+        <div class="field"><label>Fecha</label><input type="date" id="ac-fecha"></div>
+        <div class="field"><label>Hora</label><input type="time" id="ac-hora"></div>
+        <div class="field"><label>Motivo</label><input type="text" id="ac-motivo" placeholder="Ej. limpieza, control"></div>
+      </div>
+      <div class="btn-row"><button class="primary" id="btnGuardarCita">Agendar</button></div>
+    </div>
+
+    <div class="card">
+      <div class="patient-picker">
+        <label for="agendaFiltroFecha" style="font-size:13px;color:var(--ink-soft);">Ver día:</label>
+        <input type="date" id="agendaFiltroFecha">
+      </div>
+      <table>
+        <thead><tr><th>Hora</th><th>Paciente</th><th>Motivo</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tablaCitas"></tbody>
+      </table>
+      <p class="empty-row hidden" id="citasVacio">No hay citas para este día.</p>
+    </div>
+  </section>
+
+  <!-- ================= HISTORIA CLINICA ================= -->
+  <section id="view-historia" class="view">
+    <div class="card">
+      <div class="patient-picker">
+        <label for="selectPacienteHistoria" style="font-size:13px;color:var(--ink-soft);">Paciente:</label>
+        <select id="selectPacienteHistoria"></select>
+      </div>
+      <p class="empty-row" id="historiaSinPaciente">Registra un paciente en la pestaña "Pacientes" para empezar.</p>
+    </div>
+
+    <div id="historiaContenido" class="hidden">
+
+      <div class="card">
+        <h2>Ficha clínica</h2>
+        <div class="section-title">Motivo de consulta</div>
+        <div class="field"><textarea id="fc-motivo"></textarea></div>
+
+        <div class="section-title">Antecedentes personales y familiares</div>
+        <div class="check-grid" id="fc-antecedentes"></div>
+
+        <div class="section-title">Signos vitales y mediciones</div>
+        <div class="field-grid">
+          <div class="field"><label>Presión arterial</label><input type="text" id="fc-presion"></div>
+          <div class="field"><label>Frecuencia cardiaca</label><input type="text" id="fc-frecCardiaca"></div>
+          <div class="field"><label>Frecuencia respiratoria</label><input type="text" id="fc-frecResp"></div>
+          <div class="field"><label>Temperatura</label><input type="text" id="fc-temperatura"></div>
+          <div class="field"><label>Glicemia</label><input type="text" id="fc-glicemia"></div>
+        </div>
+
+        <div class="section-title">Examen del sistema estomatognático</div>
+        <div class="field-grid" id="fc-examen"></div>
+
+        <div class="btn-row"><button class="primary" id="btnGuardarFicha">Guardar ficha</button></div>
+      </div>
+
+      <div class="card">
+        <h2>Odontograma</h2>
+        <p class="hint">Toca cualquier zona con el dedo o el Apple Pencil. Cada toque cicla: sano → caries → tratado → sano.</p>
+        <div class="arch-label">Arcada superior</div>
+        <div class="arch-scroll"><div class="arch-row" id="archUpper"></div></div>
+        <div class="arch-label">Arcada inferior</div>
+        <div class="arch-scroll"><div class="arch-row" id="archLower"></div></div>
+        <div class="legend">
+          <div class="legend-item"><span class="swatch sano"></span>Sano</div>
+          <div class="legend-item"><span class="swatch caries"></span>Caries activa</div>
+          <div class="legend-item"><span class="swatch tratado"></span>Tratado</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Nueva visita</h2>
+        <div class="field-grid">
+          <div class="field"><label>Fecha</label><input type="date" id="nv-fecha"></div>
+          <div class="field"><label>Tratamiento realizado</label><input type="text" id="nv-tratamiento"></div>
+          <div class="field"><label>Pagado</label><input type="number" id="nv-pagado" min="0" step="0.01"></div>
+          <div class="field"><label>Pendiente</label><input type="number" id="nv-pendiente" min="0" step="0.01"></div>
+        </div>
+        <div class="field" style="margin-top:12px;"><label>Notas</label><textarea id="nv-notas"></textarea></div>
+        <div class="field" style="margin-top:12px;"><label>Receta</label><textarea id="nv-receta" placeholder="Medicamentos e indicaciones"></textarea></div>
+        <div class="field-grid" style="margin-top:12px;">
+          <div class="field">
+            <label>Foto antes</label>
+            <input type="file" accept="image/*" capture="environment" id="nv-fotoAntes">
+            <img id="nv-fotoAntesPreview" class="photo-preview hidden">
+          </div>
+          <div class="field">
+            <label>Foto después</label>
+            <input type="file" accept="image/*" capture="environment" id="nv-fotoDespues">
+            <img id="nv-fotoDespuesPreview" class="photo-preview hidden">
+          </div>
+        </div>
+        <div class="btn-row"><button class="primary" id="btnGuardarVisita">Guardar visita</button></div>
+      </div>
+
+      <div class="card">
+        <h2>Historial de visitas</h2>
+        <div id="listaVisitas"></div>
+        <p class="empty-row hidden" id="visitasVacio">Aún no hay visitas registradas.</p>
+      </div>
+
+      <div class="card">
+        <h2>Fidelización</h2>
+        <p class="hint" id="fidelizacionTexto"></p>
+        <div class="loyalty-row" id="fidelizacionDots"></div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<div class="print-area" id="printArea"></div>
+
+<script>
+  // Pega aquí la URL de despliegue de tu Apps Script (termina en /exec)
+  const CONFIG = { APPS_SCRIPT_URL: 'PEGA_AQUI_TU_URL_DE_DESPLIEGUE' };
+
+  const DB_KEY = 'clinica_dental_db_v1';
+  const QUEUE_KEY = 'clinica_dental_queue_v1';
+
+  function defaultDB(){
+    return { pacientes: [], citas: [], visitas: [], odontogramas: {} };
+  }
+  function loadDB(){
+    try{ return { ...defaultDB(), ...JSON.parse(localStorage.getItem(DB_KEY)) }; }
+    catch(e){ return defaultDB(); }
+  }
+  function saveDB(){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+  function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  let db = loadDB();
+  let selectedPatientId = db.pacientes[0] ? db.pacientes[0].id : null;
+
+  // ---------- SINCRONIZACIÓN CON APPS SCRIPT (con cola por si se corta el internet) ----------
+  function backendConfigurado(){
+    return CONFIG.APPS_SCRIPT_URL && !CONFIG.APPS_SCRIPT_URL.includes('PEGA_AQUI');
+  }
+  function loadQueue(){
+    try{ return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; } catch(e){ return []; }
+  }
+  function saveQueue(q){ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); actualizarIndicadorSync(); }
+
+  function encolarYSincronizar(action, payload){
+    const queue = loadQueue();
+    queue.push({ action, payload });
+    saveQueue(queue);
+    procesarCola();
+  }
+
+  let sincronizando = false;
+  async function procesarCola(){
+    if(sincronizando || !backendConfigurado() || !navigator.onLine) return;
+    sincronizando = true;
+    let queue = loadQueue();
+    while(queue.length > 0){
+      const item = queue[0];
+      try{
+        const resp = await fetch(CONFIG.APPS_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita el preflight CORS con Apps Script
+          body: JSON.stringify({ action: item.action, payload: item.payload })
+        });
+        const data = await resp.json();
+        if(!data.ok) throw new Error(data.error || 'Error desconocido del backend');
+
+        if(item.action === 'guardarVisita' && data.data){
+          const visita = db.visitas.find(v => v.id === item.payload.id);
+          if(visita){
+            if(data.data.fotoAntesUrl) visita.fotoAntesUrl = data.data.fotoAntesUrl;
+            if(data.data.fotoDespuesUrl) visita.fotoDespuesUrl = data.data.fotoDespuesUrl;
+            if(data.data.pdfUrl) visita.pdfUrl = data.data.pdfUrl;
+            saveDB();
+            if(document.getElementById('view-historia').classList.contains('active')) renderVisitas();
+          }
+        }
+
+        queue.shift();
+        saveQueue(queue);
+      }catch(err){
+        console.warn('No se pudo sincronizar, se reintentará automáticamente:', err);
+        break;
+      }
+    }
+    sincronizando = false;
+  }
+
+  function actualizarIndicadorSync(){
+    const el = document.getElementById('syncIndicator');
+    if(!el) return;
+    if(!backendConfigurado()){
+      el.textContent = 'Sin conectar al backend';
+      el.classList.remove('pendiente');
+      return;
+    }
+    const pendientes = loadQueue().length;
+    el.textContent = pendientes > 0 ? `${pendientes} cambio(s) por sincronizar` : 'Todo sincronizado';
+    el.classList.toggle('pendiente', pendientes > 0);
+  }
+
+  async function cargarDesdeBackend(){
+    if(!backendConfigurado()) return;
+    try{
+      const resp = await fetch(CONFIG.APPS_SCRIPT_URL);
+      const remoto = await resp.json();
+      db = { ...defaultDB(), ...remoto };
+      saveDB();
+      renderPacientes();
+    }catch(err){
+      console.warn('No se pudo cargar desde el backend, se usan los datos locales.', err);
+    }
+  }
+
+  window.addEventListener('online', procesarCola);
+  setInterval(procesarCola, 15000);
+
+  // ---------- TABS ----------
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('view-' + btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'agenda') renderAgenda();
+      if(btn.dataset.tab === 'historia') renderHistoria();
+      if(btn.dataset.tab === 'pacientes') renderPacientes();
+    });
+  });
+
+  // ---------- ANTECEDENTES / EXAMEN FIELD DEFINITIONS ----------
+  const ANTECEDENTES = [
+    ['alergias','Alergias'], ['hemorragias','Hemorragias'], ['vihSida','VIH / SIDA'],
+    ['hipertension','Hipertensión'], ['tuberculosis','Tuberculosis'], ['asma','Asma'],
+    ['diabetes','Diabetes'], ['enfermedadC','Enfermedad cardíaca'], ['embarazo','Embarazo'], ['otros','Otros']
+  ];
+  const EXAMEN_CAMPOS = [
+    ['labios','Labios'], ['mejillas','Mejillas'], ['maxilarSuperior','Maxilar superior'],
+    ['maxilarInferior','Maxilar inferior'], ['lengua','Lengua'], ['paladar','Paladar'],
+    ['glandulasSalivales','Glándulas salivales'], ['orofaringe','Orofaringe'], ['atm','ATM'], ['ganglio','Ganglio']
+  ];
+
+  function buildAntecedentesInputs(){
+    const container = document.getElementById('fc-antecedentes');
+    container.innerHTML = ANTECEDENTES.map(([key,label]) => `
+      <label class="checkline"><input type="checkbox" data-ant="${key}"> ${label}</label>
+    `).join('');
+  }
+  function buildExamenInputs(){
+    const container = document.getElementById('fc-examen');
+    container.innerHTML = EXAMEN_CAMPOS.map(([key,label]) => `
+      <div class="field"><label>${label}</label><input type="text" data-exam="${key}" placeholder="normal"></div>
+    `).join('');
+  }
+
+  // ---------- PACIENTES ----------
+  function renderPacientes(){
+    const tbody = document.getElementById('tablaPacientes');
+    const vacio = document.getElementById('pacientesVacio');
+    tbody.innerHTML = '';
+    vacio.classList.toggle('hidden', db.pacientes.length > 0);
+
+    db.pacientes.forEach(p => {
+      const tr = document.createElement('tr');
+      const waText = encodeURIComponent(`Hola ${p.nombre}, aquí está tu enlace para ver tu historial y tarjeta de fidelización: [pendiente de publicar la vista del paciente]`);
+      tr.innerHTML = `
+        <td>${p.nombre || '—'}</td>
+        <td>${p.edad || '—'}</td>
+        <td>${p.telefono || '—'}</td>
+        <td>${p.telefono ? `<a href="https://wa.me/${p.telefono.replace(/\\D/g,'')}?text=${waText}" target="_blank">Abrir WhatsApp</a>` : '—'}</td>
+        <td><button data-ver="${p.id}">Ver historia</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-ver]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedPatientId = btn.dataset.ver;
+        document.querySelector('.tab-btn[data-tab="historia"]').click();
+      });
+    });
+
+    refreshPatientSelects();
+  }
+
+  function refreshPatientSelects(){
+    const options = db.pacientes.map(p => `<option value="${p.id}">${p.nombre || 'Sin nombre'}</option>`).join('');
+    document.getElementById('ac-paciente').innerHTML = options || '<option value="">Sin pacientes</option>';
+    const selHistoria = document.getElementById('selectPacienteHistoria');
+    selHistoria.innerHTML = options || '<option value="">Sin pacientes</option>';
+    if(selectedPatientId) selHistoria.value = selectedPatientId;
+  }
+
+  document.getElementById('btnGuardarPaciente').addEventListener('click', () => {
+    const nombre = document.getElementById('np-nombre').value.trim();
+    if(!nombre){ alert('Ingresa al menos el nombre del paciente.'); return; }
+    const nuevo = {
+      id: uid('pac'),
+      nombre,
+      sexo: document.getElementById('np-sexo').value,
+      edad: document.getElementById('np-edad').value,
+      ci: document.getElementById('np-ci').value,
+      telefono: document.getElementById('np-telefono').value,
+      fechaNacimiento: document.getElementById('np-nacimiento').value,
+      motivoConsulta: '',
+      antecedentes: {},
+      signosVitales: {},
+      examen: {}
+    };
+    db.pacientes.push(nuevo);
+    saveDB();
+    encolarYSincronizar('guardarPaciente', nuevo);
+    ['np-nombre','np-edad','np-ci','np-telefono','np-nacimiento'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('np-sexo').value = '';
+    selectedPatientId = nuevo.id;
+    renderPacientes();
+  });
+
+  // ---------- AGENDA ----------
+  function renderAgenda(){
+    refreshPatientSelects();
+    const fechaInput = document.getElementById('agendaFiltroFecha');
+    if(!fechaInput.value) fechaInput.value = new Date().toISOString().slice(0,10);
+    const fecha = fechaInput.value;
+
+    const tbody = document.getElementById('tablaCitas');
+    const vacio = document.getElementById('citasVacio');
+    const citasDia = db.citas.filter(c => c.fecha === fecha).sort((a,b) => a.hora.localeCompare(b.hora));
+    vacio.classList.toggle('hidden', citasDia.length > 0);
+    tbody.innerHTML = '';
+
+    citasDia.forEach(c => {
+      const paciente = db.pacientes.find(p => p.id === c.pacienteId);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${c.hora}</td>
+        <td>${paciente ? paciente.nombre : '—'}</td>
+        <td>${c.motivo || '—'}</td>
+        <td><span class="badge ${c.estado}">${c.estado}</span></td>
+        <td>
+          ${c.estado === 'pendiente' ? `<button data-completar="${c.id}">Completar</button> <button class="danger" data-cancelar="${c.id}">Cancelar</button>` : ''}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-completar]').forEach(btn => btn.addEventListener('click', () => {
+      const cita = db.citas.find(c => c.id === btn.dataset.completar);
+      cita.estado = 'completada'; saveDB();
+      encolarYSincronizar('actualizarCitaEstado', { id: cita.id, estado: cita.estado });
+      renderAgenda();
+    }));
+    tbody.querySelectorAll('[data-cancelar]').forEach(btn => btn.addEventListener('click', () => {
+      const cita = db.citas.find(c => c.id === btn.dataset.cancelar);
+      cita.estado = 'cancelada'; saveDB();
+      encolarYSincronizar('actualizarCitaEstado', { id: cita.id, estado: cita.estado });
+      renderAgenda();
+    }));
+  }
+
+  document.getElementById('agendaFiltroFecha').addEventListener('input', renderAgenda);
+
+  document.getElementById('btnGuardarCita').addEventListener('click', () => {
+    const pacienteId = document.getElementById('ac-paciente').value;
+    const fecha = document.getElementById('ac-fecha').value;
+    const hora = document.getElementById('ac-hora').value;
+    if(!pacienteId || !fecha || !hora){ alert('Completa paciente, fecha y hora.'); return; }
+    const nuevaCita = {
+      id: uid('cita'), pacienteId, fecha, hora,
+      motivo: document.getElementById('ac-motivo').value, estado: 'pendiente'
+    };
+    db.citas.push(nuevaCita);
+    saveDB();
+    encolarYSincronizar('guardarCita', nuevaCita);
+    document.getElementById('ac-motivo').value = '';
+    document.getElementById('ac-hora').value = '';
+    document.getElementById('agendaFiltroFecha').value = fecha;
+    renderAgenda();
+  });
+
+  // ---------- ODONTOGRAMA (reutilizado del prototipo aprobado) ----------
+  const STATES = ['sano', 'caries', 'tratado'];
+  const COLORS = { sano: 'var(--sano)', caries: 'var(--caries)', tratado: 'var(--tratado)' };
+  const CODES_UPPER = ['18','17','16','15','14','13','12','11','GAP','21','22','23','24','25','26','27','28'];
+  const CODES_LOWER = ['48','47','46','45','44','43','42','41','GAP','31','32','33','34','35','36','37','38'];
+  const ZONE_KEYS = { posterior: ['V','M','O','D','L'], anterior: ['V','M','I','D','L'] };
+  const PERIPHERAL = {
+    V: { x: 80, y: 20, w: 80, h: 60 }, M: { x: 20, y: 80, w: 60, h: 80 },
+    D: { x: 160, y: 80, w: 60, h: 80 }, L: { x: 80, y: 160, w: 80, h: 60 }
+  };
+
+  function getToothType(code){
+    const d = Number(String(code).slice(-1));
+    return d >= 1 && d <= 3 ? 'anterior' : 'posterior';
+  }
+  function freshToothState(type){
+    const s = {}; ZONE_KEYS[type].forEach(k => s[k] = 'sano'); return s;
+  }
+  function ensureTooth(patientId, code){
+    if(!db.odontogramas[patientId]) db.odontogramas[patientId] = {};
+    const pObj = db.odontogramas[patientId];
+    const type = getToothType(code);
+    if(!pObj[code] || pObj[code]._type !== type){ pObj[code] = freshToothState(type); pObj[code]._type = type; }
+    return pObj[code];
+  }
+  function buildSvgMarkup(type){
+    const corners = [[20,20],[160,20],[20,160],[160,160]]
+      .map(([x,y]) => `<rect x="${x}" y="${y}" width="60" height="60" rx="6" fill="transparent"></rect>`).join('');
+    const peripheral = Object.entries(PERIPHERAL).map(([key, r]) => `
+      <rect class="zone" data-zone="${key}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="8" fill="var(--sano)" stroke="var(--line)"></rect>
+      <text class="zone-label" data-label="${key}" x="${r.x + r.w/2}" y="${r.y + r.h/2}" text-anchor="middle" dominant-baseline="central">${key === 'L' ? 'L/P' : key}</text>
+    `).join('');
+    let center = '';
+    if(type === 'posterior'){
+      center = `<rect class="zone" data-zone="O" x="80" y="80" width="80" height="80" rx="8" fill="var(--sano)" stroke="var(--line)"></rect>
+        <text class="zone-label" data-label="O" x="120" y="120" text-anchor="middle" dominant-baseline="central">O</text>`;
+    } else {
+      center = `<rect x="80" y="80" width="80" height="80" rx="8" fill="none" stroke="var(--line)" stroke-dasharray="4 4"></rect>
+        <rect class="zone" data-zone="I" x="80" y="80" width="80" height="26" rx="6" fill="var(--sano)" stroke="var(--line)"></rect>
+        <text class="zone-label" data-label="I" x="120" y="93" text-anchor="middle" dominant-baseline="central" style="font-size:16px">I</text>`;
+    }
+    return corners + peripheral + center;
+  }
+  function renderToothSvg(patientId, code, svgEl, cardEl){
+    const type = getToothType(code);
+    const state = ensureTooth(patientId, code);
+    svgEl.innerHTML = buildSvgMarkup(type);
+    let hasMarks = false;
+    ZONE_KEYS[type].forEach(key => {
+      const zoneEl = svgEl.querySelector(`[data-zone="${key}"]`);
+      const labelEl = svgEl.querySelector(`[data-label="${key}"]`);
+      zoneEl.setAttribute('fill', COLORS[state[key]]);
+      labelEl.classList.toggle('on-dark', state[key] !== 'sano');
+      if(state[key] !== 'sano') hasMarks = true;
+      zoneEl.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        const idx = STATES.indexOf(state[key]);
+        state[key] = STATES[(idx + 1) % STATES.length];
+        saveDB();
+        const superficies = { ...state };
+        delete superficies._type;
+        encolarYSincronizar('guardarOdontograma', { pacienteId: patientId, diente: code, tipo: type, superficies });
+        renderToothSvg(patientId, code, svgEl, cardEl);
+      });
+    });
+    cardEl.classList.toggle('has-marks', hasMarks);
+  }
+  function buildToothCard(patientId, code){
+    const card = document.createElement('div'); card.className = 'tooth-card';
+    const number = document.createElement('span'); number.className = 'tooth-number'; number.textContent = code;
+    const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgEl.setAttribute('viewBox', '0 0 240 240'); svgEl.setAttribute('class', 'tooth-svg');
+    card.appendChild(number); card.appendChild(svgEl);
+    ensureTooth(patientId, code);
+    renderToothSvg(patientId, code, svgEl, card);
+    return card;
+  }
+  function renderOdontograma(patientId){
+    const upper = document.getElementById('archUpper');
+    const lower = document.getElementById('archLower');
+    upper.innerHTML = ''; lower.innerHTML = '';
+    CODES_UPPER.forEach(code => {
+      if(code === 'GAP'){ const g = document.createElement('div'); g.className='quadrant-gap'; upper.appendChild(g); return; }
+      upper.appendChild(buildToothCard(patientId, code));
+    });
+    CODES_LOWER.forEach(code => {
+      if(code === 'GAP'){ const g = document.createElement('div'); g.className='quadrant-gap'; lower.appendChild(g); return; }
+      lower.appendChild(buildToothCard(patientId, code));
+    });
+  }
+
+  // ---------- HISTORIA CLINICA ----------
+  document.getElementById('selectPacienteHistoria').addEventListener('change', (e) => {
+    selectedPatientId = e.target.value;
+    renderHistoria();
+  });
+
+  function renderHistoria(){
+    refreshPatientSelects();
+    const sinPaciente = document.getElementById('historiaSinPaciente');
+    const contenido = document.getElementById('historiaContenido');
+
+    if(!selectedPatientId || !db.pacientes.find(p => p.id === selectedPatientId)){
+      sinPaciente.classList.remove('hidden');
+      contenido.classList.add('hidden');
+      return;
+    }
+    sinPaciente.classList.add('hidden');
+    contenido.classList.remove('hidden');
+
+    const paciente = db.pacientes.find(p => p.id === selectedPatientId);
+
+    buildAntecedentesInputs();
+    buildExamenInputs();
+
+    document.getElementById('fc-motivo').value = paciente.motivoConsulta || '';
+    document.querySelectorAll('[data-ant]').forEach(input => {
+      input.checked = !!(paciente.antecedentes || {})[input.dataset.ant];
+    });
+    const sv = paciente.signosVitales || {};
+    document.getElementById('fc-presion').value = sv.presionArterial || '';
+    document.getElementById('fc-frecCardiaca').value = sv.frecuenciaCardiaca || '';
+    document.getElementById('fc-frecResp').value = sv.frecuenciaRespiratoria || '';
+    document.getElementById('fc-temperatura').value = sv.temperatura || '';
+    document.getElementById('fc-glicemia').value = sv.glicemia || '';
+    document.querySelectorAll('[data-exam]').forEach(input => {
+      input.value = (paciente.examen || {})[input.dataset.exam] || '';
+    });
+
+    renderOdontograma(selectedPatientId);
+    renderVisitas();
+    renderFidelizacion();
+  }
+
+  document.getElementById('btnGuardarFicha').addEventListener('click', () => {
+    const paciente = db.pacientes.find(p => p.id === selectedPatientId);
+    if(!paciente) return;
+    paciente.motivoConsulta = document.getElementById('fc-motivo').value;
+    paciente.antecedentes = {};
+    document.querySelectorAll('[data-ant]').forEach(input => paciente.antecedentes[input.dataset.ant] = input.checked);
+    paciente.signosVitales = {
+      presionArterial: document.getElementById('fc-presion').value,
+      frecuenciaCardiaca: document.getElementById('fc-frecCardiaca').value,
+      frecuenciaRespiratoria: document.getElementById('fc-frecResp').value,
+      temperatura: document.getElementById('fc-temperatura').value,
+      glicemia: document.getElementById('fc-glicemia').value
+    };
+    paciente.examen = {};
+    document.querySelectorAll('[data-exam]').forEach(input => paciente.examen[input.dataset.exam] = input.value);
+    saveDB();
+    encolarYSincronizar('guardarPaciente', paciente);
+    alert('Ficha guardada.');
+  });
+
+  // ---------- VISITAS ----------
+  let fotoAntesTemp = '';
+  let fotoDespuesTemp = '';
+
+  function configurarInputFoto(inputId, previewId, setTemp){
+    document.getElementById(inputId).addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        setTemp(reader.result);
+        const img = document.getElementById(previewId);
+        img.src = reader.result;
+        img.classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  configurarInputFoto('nv-fotoAntes', 'nv-fotoAntesPreview', (v) => fotoAntesTemp = v);
+  configurarInputFoto('nv-fotoDespues', 'nv-fotoDespuesPreview', (v) => fotoDespuesTemp = v);
+
+  document.getElementById('btnGuardarVisita').addEventListener('click', () => {
+    const fecha = document.getElementById('nv-fecha').value || new Date().toISOString().slice(0,10);
+    const nuevaVisita = {
+      id: uid('visita'), pacienteId: selectedPatientId, fecha,
+      tratamiento: document.getElementById('nv-tratamiento').value,
+      pagado: Number(document.getElementById('nv-pagado').value || 0),
+      pendiente: Number(document.getElementById('nv-pendiente').value || 0),
+      notas: document.getElementById('nv-notas').value,
+      receta: document.getElementById('nv-receta').value,
+      // Mientras se sincroniza, estos campos guardan la imagen local (base64) para la vista previa.
+      // Apps Script los reemplaza por el link real de Drive cuando confirma el guardado.
+      fotoAntesUrl: fotoAntesTemp,
+      fotoDespuesUrl: fotoDespuesTemp
+    };
+    db.visitas.push(nuevaVisita);
+    saveDB();
+    encolarYSincronizar('guardarVisita', {
+      ...nuevaVisita,
+      fotoAntesBase64: fotoAntesTemp,
+      fotoDespuesBase64: fotoDespuesTemp
+    });
+
+    ['nv-fecha','nv-tratamiento','nv-pagado','nv-pendiente','nv-notas','nv-receta'].forEach(id => document.getElementById(id).value = '');
+    ['nv-fotoAntes','nv-fotoDespues'].forEach(id => document.getElementById(id).value = '');
+    ['nv-fotoAntesPreview','nv-fotoDespuesPreview'].forEach(id => document.getElementById(id).classList.add('hidden'));
+    fotoAntesTemp = ''; fotoDespuesTemp = '';
+    renderVisitas();
+    renderFidelizacion();
+  });
+
+  function renderVisitas(){
+    const lista = document.getElementById('listaVisitas');
+    const vacio = document.getElementById('visitasVacio');
+    const visitas = db.visitas.filter(v => v.pacienteId === selectedPatientId).sort((a,b) => b.fecha.localeCompare(a.fecha));
+    vacio.classList.toggle('hidden', visitas.length > 0);
+    lista.innerHTML = '';
+
+    visitas.forEach(v => {
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.style.marginBottom = '10px';
+      div.innerHTML = `
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+          <div>
+            <b>${v.fecha}</b> — ${v.tratamiento || 'Sin tratamiento especificado'}
+            <div class="hint" style="margin:6px 0 0;">${v.notas || ''}</div>
+            ${v.receta ? `<div class="hint"><b>Receta:</b> ${v.receta}</div>` : ''}
+            <div class="hint">Pagado: $${v.pagado.toFixed(2)} · Pendiente: $${v.pendiente.toFixed(2)}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+            <div style="display:flex;gap:6px;">
+              ${v.fotoAntesUrl ? `<img src="${v.fotoAntesUrl}" class="photo-preview" title="Antes" style="max-width:76px;">` : ''}
+              ${v.fotoDespuesUrl ? `<img src="${v.fotoDespuesUrl}" class="photo-preview" title="Después" style="max-width:76px;">` : ''}
+            </div>
+            ${v.pdfUrl && v.pdfUrl.startsWith('http') ? `<a href="${v.pdfUrl}" target="_blank">Ver PDF guardado</a>` : ''}
+            <button data-pdf="${v.id}">Imprimir / PDF local</button>
+          </div>
+        </div>
+      `;
+      lista.appendChild(div);
+    });
+
+    lista.querySelectorAll('[data-pdf]').forEach(btn => {
+      btn.addEventListener('click', () => imprimirVisita(btn.dataset.pdf));
+    });
+  }
+
+  function imprimirVisita(visitaId){
+    const visita = db.visitas.find(v => v.id === visitaId);
+    const paciente = db.pacientes.find(p => p.id === visita.pacienteId);
+    const printArea = document.getElementById('printArea');
+    printArea.innerHTML = `
+      <h2>Comprobante de tratamiento</h2>
+      <p class="pline"><b>Paciente:</b> ${paciente ? paciente.nombre : '—'}</p>
+      <p class="pline"><b>Fecha:</b> ${visita.fecha}</p>
+      <p class="pline"><b>Tratamiento:</b> ${visita.tratamiento || '—'}</p>
+      <p class="pline"><b>Notas:</b> ${visita.notas || '—'}</p>
+      <p class="pline"><b>Receta:</b> ${visita.receta || '—'}</p>
+      <p class="pline"><b>Pagado:</b> $${visita.pagado.toFixed(2)} &nbsp; <b>Pendiente:</b> $${visita.pendiente.toFixed(2)}</p>
+      ${visita.fotoAntesUrl ? `<p class="pline"><b>Foto antes:</b></p><img src="${visita.fotoAntesUrl}" style="max-width:260px;">` : ''}
+      ${visita.fotoDespuesUrl ? `<p class="pline"><b>Foto después:</b></p><img src="${visita.fotoDespuesUrl}" style="max-width:260px;">` : ''}
+    `;
+    window.print();
+  }
+
+  // ---------- FIDELIZACION ----------
+  const VISITAS_POR_BENEFICIO = 5;
+  function renderFidelizacion(){
+    const visitas = db.visitas.filter(v => v.pacienteId === selectedPatientId).length;
+    const enCiclo = visitas % VISITAS_POR_BENEFICIO;
+    const faltan = enCiclo === 0 && visitas > 0 ? 0 : VISITAS_POR_BENEFICIO - enCiclo;
+
+    document.getElementById('fidelizacionTexto').textContent = faltan === 0 && visitas > 0
+      ? `¡Beneficio desbloqueado! Cada ${VISITAS_POR_BENEFICIO} visitas, el paciente gana una limpieza gratis.`
+      : `${visitas} visita(s) registradas. Faltan ${faltan} para el próximo beneficio (limpieza gratis).`;
+
+    const dots = document.getElementById('fidelizacionDots');
+    dots.innerHTML = '';
+    for(let i = 1; i <= VISITAS_POR_BENEFICIO; i++){
+      const dot = document.createElement('div');
+      const posicionActual = enCiclo === 0 ? (visitas > 0 ? VISITAS_POR_BENEFICIO : 0) : enCiclo;
+      dot.className = 'loyalty-dot' + (i <= posicionActual ? ' filled' : '') + (i === VISITAS_POR_BENEFICIO ? ' reward' : '');
+      dot.textContent = i === VISITAS_POR_BENEFICIO ? '★' : i;
+      dots.appendChild(dot);
+    }
+  }
+
+  // ---------- INIT ----------
+  buildAntecedentesInputs();
+  buildExamenInputs();
+  renderPacientes();
+  actualizarIndicadorSync();
+  cargarDesdeBackend();
+  procesarCola();
+</script>
+</body>
+</html>
