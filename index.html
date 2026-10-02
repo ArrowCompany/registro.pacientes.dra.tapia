@@ -111,6 +111,21 @@
 
   .patient-picker{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
   .patient-picker select{ padding:9px 11px; border-radius:8px; border:1px solid var(--line); font-size:14.5px; min-width:220px; }
+
+  .search-input{
+    width:100%; padding:10px 12px; border-radius:9px; border:1px solid var(--line);
+    font-size:14.5px; background:var(--surface); color:var(--ink); margin:10px 0 14px;
+  }
+  .patient-search-wrap{ position:relative; }
+  .patient-search-results{
+    position:absolute; top:calc(100% - 10px); left:0; right:0; background:var(--surface);
+    border:1px solid var(--line); border-radius:10px; max-height:240px; overflow-y:auto;
+    z-index:10; display:none; box-shadow:0 8px 20px rgba(0,0,0,0.08);
+  }
+  .patient-search-results.show{ display:block; }
+  .patient-search-results .item{ padding:11px 14px; font-size:14.5px; cursor:pointer; }
+  .patient-search-results .item:hover{ background:var(--cream); }
+  .patient-search-results .item.empty{ color:var(--ink-soft); cursor:default; }
   .patient-summary{ display:flex; gap:18px; flex-wrap:wrap; font-size:13.5px; color:var(--ink-soft); }
   .patient-summary b{ color:var(--ink); }
 
@@ -203,6 +218,7 @@
 
     <div class="card">
       <h2>Pacientes registrados</h2>
+      <input type="text" id="buscarPaciente" class="search-input" placeholder="🔍 Buscar por nombre, cédula o teléfono">
       <table>
         <thead><tr><th>Nombre</th><th>Edad</th><th>Teléfono</th><th>Enlace WhatsApp</th><th></th></tr></thead>
         <tbody id="tablaPacientes"></tbody>
@@ -240,10 +256,12 @@
   <!-- ================= HISTORIA CLINICA ================= -->
   <section id="view-historia" class="view">
     <div class="card">
-      <div class="patient-picker">
-        <label for="selectPacienteHistoria" style="font-size:13px;color:var(--ink-soft);">Paciente:</label>
-        <select id="selectPacienteHistoria"></select>
+      <label style="font-size:13px;color:var(--ink-soft);">Paciente:</label>
+      <div class="patient-search-wrap">
+        <input type="text" id="buscarPacienteHistoria" class="search-input" placeholder="🔍 Escribe un nombre..." autocomplete="off">
+        <div class="patient-search-results" id="resultadosPacienteHistoria"></div>
       </div>
+      <p class="hint" id="pacienteHistoriaActual" style="margin-top:8px;"></p>
       <p class="empty-row" id="historiaSinPaciente">Registra un paciente en la pestaña "Pacientes" para empezar.</p>
     </div>
 
@@ -470,14 +488,32 @@
     `).join('');
   }
 
+  // ---------- BÚSQUEDA (sin tildes, sin mayúsculas) ----------
+  function normalizar(s){
+    return (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
   // ---------- PACIENTES ----------
+  let filtroPacientes = '';
   function renderPacientes(){
     const tbody = document.getElementById('tablaPacientes');
     const vacio = document.getElementById('pacientesVacio');
     tbody.innerHTML = '';
-    vacio.classList.toggle('hidden', db.pacientes.length > 0);
 
-    db.pacientes.forEach(p => {
+    const termino = normalizar(filtroPacientes);
+    const listaFiltrada = termino
+      ? db.pacientes.filter(p => normalizar(p.nombre).includes(termino) || normalizar(p.ci).includes(termino) || normalizar(p.telefono).includes(termino))
+      : db.pacientes;
+
+    vacio.classList.toggle('hidden', listaFiltrada.length > 0);
+    if(listaFiltrada.length === 0 && db.pacientes.length > 0){
+      vacio.textContent = 'No hay pacientes que coincidan con la búsqueda.';
+      vacio.classList.remove('hidden');
+    } else {
+      vacio.textContent = 'Aún no hay pacientes registrados.';
+    }
+
+    listaFiltrada.forEach(p => {
       const tr = document.createElement('tr');
       const waText = encodeURIComponent(`Hola ${p.nombre}, aquí está tu enlace para ver tu historial y tarjeta de fidelización: [pendiente de publicar la vista del paciente]`);
       tr.innerHTML = `
@@ -503,10 +539,12 @@
   function refreshPatientSelects(){
     const options = db.pacientes.map(p => `<option value="${p.id}">${p.nombre || 'Sin nombre'}</option>`).join('');
     document.getElementById('ac-paciente').innerHTML = options || '<option value="">Sin pacientes</option>';
-    const selHistoria = document.getElementById('selectPacienteHistoria');
-    selHistoria.innerHTML = options || '<option value="">Sin pacientes</option>';
-    if(selectedPatientId) selHistoria.value = selectedPatientId;
   }
+
+  document.getElementById('buscarPaciente').addEventListener('input', (e) => {
+    filtroPacientes = e.target.value;
+    renderPacientes();
+  });
 
   document.getElementById('btnGuardarPaciente').addEventListener('click', () => {
     const nombre = document.getElementById('np-nombre').value.trim();
@@ -687,25 +725,55 @@
   }
 
   // ---------- HISTORIA CLINICA ----------
-  document.getElementById('selectPacienteHistoria').addEventListener('change', (e) => {
-    selectedPatientId = e.target.value;
-    renderHistoria();
+  const inputBuscarHistoria = document.getElementById('buscarPacienteHistoria');
+  const resultadosHistoria = document.getElementById('resultadosPacienteHistoria');
+
+  function mostrarResultadosHistoria(termino){
+    const t = normalizar(termino);
+    const coincidencias = t
+      ? db.pacientes.filter(p => normalizar(p.nombre).includes(t))
+      : db.pacientes;
+
+    resultadosHistoria.innerHTML = coincidencias.length
+      ? coincidencias.map(p => `<div class="item" data-id="${p.id}">${p.nombre || 'Sin nombre'}</div>`).join('')
+      : '<div class="item empty">Sin resultados</div>';
+
+    resultadosHistoria.querySelectorAll('[data-id]').forEach(el => {
+      el.addEventListener('mousedown', (ev) => {
+        ev.preventDefault(); // evita que el blur del input cierre la lista antes del click
+        selectedPatientId = el.dataset.id;
+        inputBuscarHistoria.value = '';
+        resultadosHistoria.classList.remove('show');
+        renderHistoria();
+      });
+    });
+
+    resultadosHistoria.classList.add('show');
+  }
+
+  inputBuscarHistoria.addEventListener('input', (e) => mostrarResultadosHistoria(e.target.value));
+  inputBuscarHistoria.addEventListener('focus', (e) => mostrarResultadosHistoria(e.target.value));
+  inputBuscarHistoria.addEventListener('blur', () => {
+    setTimeout(() => resultadosHistoria.classList.remove('show'), 120);
   });
 
   function renderHistoria(){
     refreshPatientSelects();
     const sinPaciente = document.getElementById('historiaSinPaciente');
     const contenido = document.getElementById('historiaContenido');
+    const actualLabel = document.getElementById('pacienteHistoriaActual');
 
     if(!selectedPatientId || !db.pacientes.find(p => p.id === selectedPatientId)){
       sinPaciente.classList.remove('hidden');
       contenido.classList.add('hidden');
+      actualLabel.textContent = '';
       return;
     }
     sinPaciente.classList.add('hidden');
     contenido.classList.remove('hidden');
 
     const paciente = db.pacientes.find(p => p.id === selectedPatientId);
+    actualLabel.innerHTML = `Viendo a: <b>${paciente.nombre || 'Sin nombre'}</b>`;
 
     buildAntecedentesInputs();
     buildExamenInputs();
