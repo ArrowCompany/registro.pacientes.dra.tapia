@@ -6,10 +6,14 @@
 <title>Panel odontológico</title>
 <style>
   :root{
-    --bg:#F4F6F5; --surface:#FFFFFF; --ink:#13201E; --ink-soft:#5C6B68;
-    --line:#D8E0DE; --teal:#0E6B65; --teal-dark:#0A4F4B;
-    --caries:#D6472E; --tratado:#2659C7; --sano:#EDF1F0;
+    --bg:#FFFCFB; --surface:#FFFFFF; --cream:#F7ECDE; --ink:#3A2E2E; --ink-soft:#8A7A74;
+    --line:#EFE1D4; --teal:#D98A9B; --teal-dark:#B96A7C;
+    --caries:#D6472E; --tratado:#2659C7; --sano:#F3ECE3;
     --warn:#B9790A;
+  }
+  :root[data-theme="dark"]{
+    --bg:#241B1D; --surface:#2E2225; --cream:#3A2B2A; --ink:#F5E9E4; --ink-soft:#BFA8A2;
+    --line:#4A3634; --teal:#E8A4B4; --teal-dark:#F2B8C6; --sano:#3A2B2A;
   }
   *{box-sizing:border-box;}
   html,body{height:100%;}
@@ -35,6 +39,10 @@
     background:var(--sano); padding:3px 9px; border-radius:999px; margin-left:8px; vertical-align:middle;
   }
   .sync-indicator.pendiente{ background:#FBEBD2; color:var(--warn) !important; }
+  .theme-toggle-btn{
+    padding:7px 13px; border-radius:999px; border:1px solid var(--line); background:var(--cream);
+    color:var(--ink); font-size:12.5px; font-weight:600; cursor:pointer;
+  }
   .tabs{
     display:flex; gap:4px; margin-top:12px; overflow-x:auto;
   }
@@ -98,7 +106,7 @@
     display:inline-block; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:999px;
   }
   .badge.pendiente{ background:#FBEBD2; color:var(--warn); }
-  .badge.completada{ background:#DCEEEC; color:var(--teal-dark); }
+  .badge.completada{ background:var(--cream); color:var(--teal-dark); }
   .badge.cancelada{ background:#F3DEDC; color:#B3261E; }
 
   .patient-picker{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
@@ -148,14 +156,10 @@
   }
 
   @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --bg:#10201D; --surface:#17302B; --ink:#EAF2F0; --ink-soft:#9BB0AC;
-      --line:#274641; --sano:#1F3B35;
+    :root:not([data-theme="light"]):not([data-theme="dark"]){
+      --bg:#241B1D; --surface:#2E2225; --cream:#3A2B2A; --ink:#F5E9E4; --ink-soft:#BFA8A2;
+      --line:#4A3634; --teal:#E8A4B4; --teal-dark:#F2B8C6; --sano:#3A2B2A;
     }
-  }
-  :root[data-theme="dark"]{
-    --bg:#10201D; --surface:#17302B; --ink:#EAF2F0; --ink-soft:#9BB0AC;
-    --line:#274641; --sano:#1F3B35;
   }
 </style>
 </head>
@@ -163,7 +167,10 @@
 
 <header class="app-header">
   <div class="app-header-inner">
-    <div class="brand">Panel <span>odontológico</span> <span class="sync-indicator" id="syncIndicator">Todo sincronizado</span></div>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+      <div class="brand">Panel <span>odontológico</span> <span class="sync-indicator" id="syncIndicator">Todo sincronizado</span></div>
+      <button type="button" id="themeToggle" class="theme-toggle-btn">🌙 Modo oscuro</button>
+    </div>
     <nav class="tabs">
       <button class="tab-btn active" data-tab="pacientes">Pacientes</button>
       <button class="tab-btn" data-tab="agenda">Agenda</button>
@@ -325,7 +332,7 @@
 
 <script>
   // Pega aquí la URL de despliegue de tu Apps Script (termina en /exec)
-  const CONFIG = { APPS_SCRIPT_URL: 'PEGA_AQUI_TU_URL_DE_DESPLIEGUE' };
+  const CONFIG = { APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbznpX-f_N7MvaLxodfZDJthEZ__hkfXVM-_E49O3xcM7c8zGaeB_emfdx-aY-_TxtE8/exec' };
 
   const DB_KEY = 'clinica_dental_db_v1';
   const QUEUE_KEY = 'clinica_dental_queue_v1';
@@ -870,7 +877,32 @@
     }
   }
 
+  // ---------- MODO OSCURO (manual, se guarda la preferencia) ----------
+  const THEME_KEY = 'clinica_dental_theme';
+  function aplicarTema(tema){
+    if(tema === 'dark' || tema === 'light'){
+      document.documentElement.setAttribute('data-theme', tema);
+    } else {
+      document.documentElement.removeAttribute('data-theme'); // sigue la preferencia del sistema
+    }
+    const btn = document.getElementById('themeToggle');
+    const esOscuroAhora = tema === 'dark' || (tema !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    btn.textContent = esOscuroAhora ? '☀️ Modo claro' : '🌙 Modo oscuro';
+  }
+  function initTema(){
+    const guardado = localStorage.getItem(THEME_KEY);
+    aplicarTema(guardado || 'auto');
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      const actual = document.documentElement.getAttribute('data-theme');
+      const esOscuroAhora = actual === 'dark' || (!actual && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      const nuevo = esOscuroAhora ? 'light' : 'dark';
+      localStorage.setItem(THEME_KEY, nuevo);
+      aplicarTema(nuevo);
+    });
+  }
+
   // ---------- INIT ----------
+  initTema();
   buildAntecedentesInputs();
   buildExamenInputs();
   renderPacientes();
