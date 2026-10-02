@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Panel odontológico</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#FFFCFB; --surface:#FFFFFF; --cream:#F7ECDE; --ink:#3A2E2E; --ink-soft:#8A7A74;
@@ -112,6 +113,21 @@
   .badge.completada{ background:var(--cream); color:var(--teal-dark); }
   .badge.cancelada{ background:#F3DEDC; color:#B3261E; }
 
+  .card-header-toggle{
+    display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none;
+  }
+  .chevron{ font-size:13px; color:var(--ink-soft); transition:transform 150ms ease; }
+  .chevron.open{ transform:rotate(90deg); }
+  .ficha-body{ margin-top:14px; }
+  .ficha-body.collapsed{ display:none; }
+  .icon-btn{
+    border:none; background:transparent; font-size:17px; padding:4px; border-radius:7px; cursor:pointer;
+    line-height:1;
+  }
+  .icon-btn:hover{ background:var(--cream); }
+  .icon-btn.hidden{ display:none; }
+  .paciente-nombre-grande{ font-size:24px; font-weight:700; margin:0; }
+
   .patient-picker{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
   .patient-picker select{ padding:9px 11px; border-radius:8px; border:1px solid var(--line); font-size:14.5px; min-width:220px; }
 
@@ -162,6 +178,8 @@
   .loyalty-dot.reward{ background:#FBEBD2; color:var(--warn); border-color:#F0D9AC; }
 
   .photo-preview{ max-width:160px; border-radius:8px; margin-top:8px; border:1px solid var(--line); }
+  .photo-preview-row{ display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .photo-preview-row img{ width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--line); }
   .photo-click{ cursor:zoom-in; }
   .lightbox-overlay{
     display:none; position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:50;
@@ -200,6 +218,7 @@
       <button class="tab-btn active" data-tab="pacientes">Pacientes</button>
       <button class="tab-btn" data-tab="agenda">Agenda</button>
       <button class="tab-btn" data-tab="historia">Historia clínica</button>
+      <button class="tab-btn" data-tab="config">⚙️ Configuración</button>
     </nav>
   </div>
 </header>
@@ -265,41 +284,54 @@
 
   <!-- ================= HISTORIA CLINICA ================= -->
   <section id="view-historia" class="view">
-    <div class="card">
+    <div class="card" id="historiaBuscadorWrap">
       <label style="font-size:13px;color:var(--ink-soft);">Paciente:</label>
       <div class="patient-search-wrap">
-        <input type="text" id="buscarPacienteHistoria" class="search-input" placeholder="🔍 Escribe un nombre..." autocomplete="off">
+        <input type="text" id="buscarPacienteHistoria" class="search-input" placeholder="🔍 Escribe un nombre o toca aquí para ver la lista" autocomplete="off">
         <div class="patient-search-results" id="resultadosPacienteHistoria"></div>
       </div>
-      <p class="hint" id="pacienteHistoriaActual" style="margin-top:8px;"></p>
       <p class="empty-row" id="historiaSinPaciente">Registra un paciente en la pestaña "Pacientes" para empezar.</p>
+    </div>
+
+    <div class="card hidden" id="historiaPacienteBar">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <h2 id="historiaNombrePaciente" class="paciente-nombre-grande"></h2>
+        <button id="btnCambiarPaciente">🔍 Cambiar paciente</button>
+      </div>
     </div>
 
     <div id="historiaContenido" class="hidden">
 
       <div class="card">
-        <h2>Ficha clínica</h2>
-        <div class="section-title">Motivo de consulta</div>
-        <div class="field"><textarea id="fc-motivo"></textarea></div>
-
-        <div class="section-title">Antecedentes personales y familiares</div>
-        <div class="check-grid" id="fc-antecedentes"></div>
-
-        <div class="section-title">Signos vitales y mediciones</div>
-        <div class="field-grid">
-          <div class="field"><label>Presión arterial</label><input type="text" id="fc-presion"></div>
-          <div class="field"><label>Frecuencia cardiaca</label><input type="text" id="fc-frecCardiaca"></div>
-          <div class="field"><label>Frecuencia respiratoria</label><input type="text" id="fc-frecResp"></div>
-          <div class="field"><label>Temperatura</label><input type="text" id="fc-temperatura"></div>
-          <div class="field"><label>Glicemia</label><input type="text" id="fc-glicemia"></div>
+        <div class="card-header-toggle" id="fichaHeaderToggle">
+          <h2>Ficha clínica</h2>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button type="button" id="btnEditarFicha" class="icon-btn" title="Editar ficha">✏️</button>
+            <span class="chevron" id="fichaChevron">▸</span>
+          </div>
         </div>
+        <div id="fichaBody" class="ficha-body collapsed">
+          <div class="section-title">Motivo de consulta</div>
+          <div class="field"><textarea id="fc-motivo"></textarea></div>
 
-        <div class="section-title">Examen del sistema estomatognático</div>
-        <div class="field-grid" id="fc-examen"></div>
+          <div class="section-title">Antecedentes personales y familiares</div>
+          <div class="check-grid" id="fc-antecedentes"></div>
 
-        <div class="btn-row">
-          <button class="primary" id="btnGuardarFicha">Guardar ficha</button>
-          <button id="btnEditarFicha" class="hidden">Editar ficha</button>
+          <div class="section-title">Signos vitales y mediciones</div>
+          <div class="field-grid">
+            <div class="field"><label>Presión arterial</label><input type="text" id="fc-presion"></div>
+            <div class="field"><label>Frecuencia cardiaca</label><input type="text" id="fc-frecCardiaca"></div>
+            <div class="field"><label>Frecuencia respiratoria</label><input type="text" id="fc-frecResp"></div>
+            <div class="field"><label>Temperatura</label><input type="text" id="fc-temperatura"></div>
+            <div class="field"><label>Glicemia</label><input type="text" id="fc-glicemia"></div>
+          </div>
+
+          <div class="section-title">Examen del sistema estomatognático</div>
+          <div class="field-grid" id="fc-examen"></div>
+
+          <div class="btn-row">
+            <button class="primary hidden" id="btnGuardarFicha">Guardar ficha</button>
+          </div>
         </div>
       </div>
 
@@ -318,28 +350,37 @@
       </div>
 
       <div class="card">
-        <h2>Nueva visita</h2>
+        <h2>Descripción de la consulta</h2>
         <div class="field-grid">
           <div class="field"><label>Fecha</label><input type="date" id="nv-fecha"></div>
           <div class="field"><label>Tratamiento realizado</label><input type="text" id="nv-tratamiento"></div>
-          <div class="field"><label>Pagado</label><input type="number" id="nv-pagado" min="0" step="0.01"></div>
-          <div class="field"><label>Pendiente</label><input type="number" id="nv-pendiente" min="0" step="0.01"></div>
         </div>
+
+        <div class="section-title">Pagos</div>
+        <div class="field-grid">
+          <div class="field"><label>Valor del tratamiento</label><input type="number" id="nv-valorTratamiento" min="0" step="0.01"></div>
+          <div class="field"><label>Abono de esta sesión</label><input type="number" id="nv-abono" min="0" step="0.01" value="0"></div>
+          <div class="field">
+            <label>Pendiente (automático)</label>
+            <input type="text" id="nv-pendienteCalculado" disabled value="$0.00">
+          </div>
+        </div>
+
         <div class="field" style="margin-top:12px;"><label>Notas</label><textarea id="nv-notas"></textarea></div>
         <div class="field" style="margin-top:12px;"><label>Receta</label><textarea id="nv-receta" placeholder="Medicamentos e indicaciones"></textarea></div>
         <div class="field-grid" style="margin-top:12px;">
           <div class="field">
-            <label>Foto antes</label>
-            <input type="file" accept="image/*" capture="environment" id="nv-fotoAntes">
-            <img id="nv-fotoAntesPreview" class="photo-preview hidden">
+            <label>Fotos antes (máx. 3)</label>
+            <input type="file" accept="image/*" capture="environment" id="nv-fotoAntes" multiple>
+            <div class="photo-preview-row" id="nv-fotoAntesPreview"></div>
           </div>
           <div class="field">
-            <label>Foto después</label>
-            <input type="file" accept="image/*" capture="environment" id="nv-fotoDespues">
-            <img id="nv-fotoDespuesPreview" class="photo-preview hidden">
+            <label>Fotos después (máx. 3)</label>
+            <input type="file" accept="image/*" capture="environment" id="nv-fotoDespues" multiple>
+            <div class="photo-preview-row" id="nv-fotoDespuesPreview"></div>
           </div>
         </div>
-        <div class="btn-row"><button class="primary" id="btnGuardarVisita">Guardar visita</button></div>
+        <div class="btn-row"><button class="primary" id="btnGuardarVisita">Guardar consulta</button></div>
       </div>
 
       <div class="card">
@@ -357,6 +398,21 @@
     </div>
   </section>
 
+  <!-- ================= CONFIGURACION ================= -->
+  <section id="view-config" class="view">
+    <div class="card">
+      <h2>Notificaciones de citas</h2>
+      <p class="hint">Cada vez que agendes una cita nueva en "Agenda", se enviará un aviso a este correo (requiere que el backend esté conectado).</p>
+      <div class="field"><label>Correo para avisos</label><input type="text" id="cfg-correo" placeholder="tucorreo@ejemplo.com"></div>
+      <div class="btn-row"><button class="primary" id="btnGuardarCorreo">Guardar correo</button></div>
+    </div>
+
+    <div class="card">
+      <h2>Exportar datos</h2>
+      <p class="hint">Descarga un Excel con todos los pacientes registrados (datos guardados en este dispositivo).</p>
+      <div class="btn-row"><button class="primary" id="btnDescargarExcel">⬇️ Descargar Excel</button></div>
+    </div>
+  </section>
 </main>
 
 <div class="print-area" id="printArea"></div>
@@ -373,7 +429,7 @@
   const QUEUE_KEY = 'clinica_dental_queue_v1';
 
   function defaultDB(){
-    return { pacientes: [], citas: [], visitas: [], odontogramas: {} };
+    return { pacientes: [], citas: [], visitas: [], odontogramas: {}, config: { correoNotificaciones: '' } };
   }
   function loadDB(){
     try{ return { ...defaultDB(), ...JSON.parse(localStorage.getItem(DB_KEY)) }; }
@@ -477,6 +533,7 @@
       if(btn.dataset.tab === 'agenda') renderAgenda();
       if(btn.dataset.tab === 'historia') renderHistoria();
       if(btn.dataset.tab === 'pacientes') renderPacientes();
+      if(btn.dataset.tab === 'config') renderConfiguracion();
     });
   });
 
@@ -644,6 +701,10 @@
     db.citas.push(nuevaCita);
     saveDB();
     encolarYSincronizar('guardarCita', nuevaCita);
+    const pacienteCita = db.pacientes.find(p => p.id === pacienteId);
+    encolarYSincronizar('notificarCita', {
+      pacienteNombre: pacienteCita ? pacienteCita.nombre : 'Paciente', fecha, hora, motivo: nuevaCita.motivo
+    });
     document.getElementById('ac-motivo').value = '';
     document.getElementById('ac-hora').value = '';
     document.getElementById('agendaFiltroFecha').value = fecha;
@@ -774,23 +835,32 @@
     setTimeout(() => resultadosHistoria.classList.remove('show'), 120);
   });
 
+  document.getElementById('btnCambiarPaciente').addEventListener('click', () => {
+    selectedPatientId = null;
+    renderHistoria();
+    setTimeout(() => inputBuscarHistoria.focus(), 50);
+  });
+
   function renderHistoria(){
     refreshPatientSelects();
+    const buscadorWrap = document.getElementById('historiaBuscadorWrap');
+    const pacienteBar = document.getElementById('historiaPacienteBar');
     const sinPaciente = document.getElementById('historiaSinPaciente');
     const contenido = document.getElementById('historiaContenido');
-    const actualLabel = document.getElementById('pacienteHistoriaActual');
 
     if(!selectedPatientId || !db.pacientes.find(p => p.id === selectedPatientId)){
-      sinPaciente.classList.remove('hidden');
+      buscadorWrap.classList.remove('hidden');
+      pacienteBar.classList.add('hidden');
       contenido.classList.add('hidden');
-      actualLabel.textContent = '';
+      sinPaciente.classList.toggle('hidden', db.pacientes.length > 0);
       return;
     }
-    sinPaciente.classList.add('hidden');
+    buscadorWrap.classList.add('hidden');
+    pacienteBar.classList.remove('hidden');
     contenido.classList.remove('hidden');
 
     const paciente = db.pacientes.find(p => p.id === selectedPatientId);
-    actualLabel.innerHTML = `Viendo a: <b>${paciente.nombre || 'Sin nombre'}</b>`;
+    document.getElementById('historiaNombrePaciente').textContent = paciente.nombre || 'Sin nombre';
 
     buildAntecedentesInputs();
     buildExamenInputs();
@@ -809,21 +879,29 @@
       input.value = (paciente.examen || {})[input.dataset.exam] || '';
     });
 
-    const tieneDatos = !!(
-      paciente.motivoConsulta ||
-      Object.values(paciente.antecedentes || {}).some(Boolean) ||
-      Object.values(paciente.signosVitales || {}).some(v => v) ||
-      Object.values(paciente.examen || {}).some(v => v)
-    );
-    setFichaEditable(!tieneDatos);
+    setFichaEditable(false);
+    document.getElementById('fichaBody').classList.add('collapsed');
+    document.getElementById('fichaChevron').classList.remove('open');
 
     if(!document.getElementById('nv-fecha').value){
       document.getElementById('nv-fecha').value = new Date().toISOString().slice(0,10);
     }
+    document.getElementById('nv-valorTratamiento').value = paciente.valorTratamiento || '';
+    document.getElementById('nv-abono').value = 0;
+    actualizarPendienteCalculado();
+
     renderOdontograma(selectedPatientId);
     renderVisitas();
     renderFidelizacion();
   }
+
+  document.getElementById('fichaHeaderToggle').addEventListener('click', (e) => {
+    if(e.target.closest('#btnEditarFicha')) return; // el lápiz no debe abrir/cerrar
+    const body = document.getElementById('fichaBody');
+    const abierta = !body.classList.contains('collapsed');
+    body.classList.toggle('collapsed', abierta);
+    document.getElementById('fichaChevron').classList.toggle('open', !abierta);
+  });
 
   function setFichaEditable(editable){
     const campos = [
@@ -835,7 +913,12 @@
     document.getElementById('btnEditarFicha').classList.toggle('hidden', editable);
   }
 
-  document.getElementById('btnEditarFicha').addEventListener('click', () => setFichaEditable(true));
+  document.getElementById('btnEditarFicha').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('fichaBody').classList.remove('collapsed');
+    document.getElementById('fichaChevron').classList.add('open');
+    setFichaEditable(true);
+  });
 
   document.getElementById('btnGuardarFicha').addEventListener('click', () => {
     const paciente = db.pacientes.find(p => p.id === selectedPatientId);
@@ -858,54 +941,104 @@
     alert('Ficha guardada.');
   });
 
-  // ---------- VISITAS ----------
-  let fotoAntesTemp = '';
-  let fotoDespuesTemp = '';
+  // ---------- VISITAS (DESCRIPCIÓN DE LA CONSULTA) ----------
+  const MAX_FOTOS = 3;
+  let fotosAntesTemp = [];
+  let fotosDespuesTemp = [];
 
-  function configurarInputFoto(inputId, previewId, setTemp){
-    document.getElementById(inputId).addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if(!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        setTemp(reader.result);
-        const img = document.getElementById(previewId);
-        img.src = reader.result;
-        img.classList.remove('hidden');
-      };
-      reader.readAsDataURL(file);
+  function configurarInputFoto(inputId, previewId, getArr, setArr){
+    document.getElementById(inputId).addEventListener('change', async (e) => {
+      const archivos = Array.from(e.target.files || []);
+      const actuales = getArr();
+      const espacioDisponible = MAX_FOTOS - actuales.length;
+      if(archivos.length > espacioDisponible){
+        alert(`Máximo ${MAX_FOTOS} fotos. Se tomarán las primeras ${Math.max(espacioDisponible,0)} que faltan.`);
+      }
+      const seleccionados = archivos.slice(0, espacioDisponible);
+      for(const file of seleccionados){
+        const dataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.readAsDataURL(file);
+        });
+        actuales.push(dataUrl);
+      }
+      setArr(actuales);
+      pintarPreviewFotos(previewId, actuales);
+      e.target.value = '';
     });
   }
-  configurarInputFoto('nv-fotoAntes', 'nv-fotoAntesPreview', (v) => fotoAntesTemp = v);
-  configurarInputFoto('nv-fotoDespues', 'nv-fotoDespuesPreview', (v) => fotoDespuesTemp = v);
+
+  function pintarPreviewFotos(previewId, arr){
+    const cont = document.getElementById(previewId);
+    cont.innerHTML = arr.map((src, i) => `<img src="${src}" data-quitar="${previewId}:${i}" title="Toca para quitar">`).join('');
+    cont.querySelectorAll('[data-quitar]').forEach(img => {
+      img.addEventListener('click', () => {
+        const [pid, idx] = img.dataset.quitar.split(':');
+        if(pid === 'nv-fotoAntesPreview'){ fotosAntesTemp.splice(Number(idx),1); pintarPreviewFotos(pid, fotosAntesTemp); }
+        else { fotosDespuesTemp.splice(Number(idx),1); pintarPreviewFotos(pid, fotosDespuesTemp); }
+      });
+    });
+  }
+
+  configurarInputFoto('nv-fotoAntes', 'nv-fotoAntesPreview', () => fotosAntesTemp, (arr) => fotosAntesTemp = arr);
+  configurarInputFoto('nv-fotoDespues', 'nv-fotoDespuesPreview', () => fotosDespuesTemp, (arr) => fotosDespuesTemp = arr);
+
+  // ---------- CÁLCULO AUTOMÁTICO: valor del tratamiento − todos los abonos ----------
+  function sumaAbonosPrevios(pacienteId){
+    return db.visitas.filter(v => v.pacienteId === pacienteId).reduce((s,v) => s + (Number(v.abono) || 0), 0);
+  }
+  function actualizarPendienteCalculado(){
+    const valor = Number(document.getElementById('nv-valorTratamiento').value || 0);
+    const abono = Number(document.getElementById('nv-abono').value || 0);
+    const previos = selectedPatientId ? sumaAbonosPrevios(selectedPatientId) : 0;
+    const pendiente = Math.max(valor - (previos + abono), 0);
+    document.getElementById('nv-pendienteCalculado').value = '$' + pendiente.toFixed(2);
+  }
+  document.getElementById('nv-valorTratamiento').addEventListener('input', actualizarPendienteCalculado);
+  document.getElementById('nv-abono').addEventListener('input', actualizarPendienteCalculado);
 
   document.getElementById('btnGuardarVisita').addEventListener('click', () => {
+    const paciente = db.pacientes.find(p => p.id === selectedPatientId);
+    if(!paciente) return;
+
     const fecha = document.getElementById('nv-fecha').value || new Date().toISOString().slice(0,10);
+    const valorTratamiento = Number(document.getElementById('nv-valorTratamiento').value || 0);
+    const abono = Number(document.getElementById('nv-abono').value || 0);
+    const previos = sumaAbonosPrevios(selectedPatientId);
+    const pendiente = Math.max(valorTratamiento - (previos + abono), 0);
+
+    // El valor del tratamiento queda guardado en la ficha del paciente para la próxima sesión.
+    paciente.valorTratamiento = valorTratamiento;
+    saveDB();
+    encolarYSincronizar('guardarPaciente', paciente);
+
     const nuevaVisita = {
       id: uid('visita'), pacienteId: selectedPatientId, fecha,
       tratamiento: document.getElementById('nv-tratamiento').value,
-      pagado: Number(document.getElementById('nv-pagado').value || 0),
-      pendiente: Number(document.getElementById('nv-pendiente').value || 0),
+      valorTratamiento, abono, pendiente,
       notas: document.getElementById('nv-notas').value,
       receta: document.getElementById('nv-receta').value,
-      // Mientras se sincroniza, estos campos guardan la imagen local (base64) para la vista previa.
-      // Apps Script los reemplaza por el link real de Drive cuando confirma el guardado.
-      fotoAntesUrl: fotoAntesTemp,
-      fotoDespuesUrl: fotoDespuesTemp
+      // Mientras se sincroniza, estos campos guardan las imágenes locales (base64) para la vista previa.
+      // Apps Script las reemplaza por los links reales de Drive cuando confirma el guardado.
+      fotoAntesUrl: [...fotosAntesTemp],
+      fotoDespuesUrl: [...fotosDespuesTemp]
     };
     db.visitas.push(nuevaVisita);
     saveDB();
     encolarYSincronizar('guardarVisita', {
       ...nuevaVisita,
-      fotoAntesBase64: fotoAntesTemp,
-      fotoDespuesBase64: fotoDespuesTemp
+      fotoAntesBase64: [...fotosAntesTemp],
+      fotoDespuesBase64: [...fotosDespuesTemp]
     });
 
-    ['nv-tratamiento','nv-pagado','nv-pendiente','nv-notas','nv-receta'].forEach(id => document.getElementById(id).value = '');
+    ['nv-tratamiento','nv-notas','nv-receta'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('nv-fecha').value = new Date().toISOString().slice(0,10);
-    ['nv-fotoAntes','nv-fotoDespues'].forEach(id => document.getElementById(id).value = '');
-    ['nv-fotoAntesPreview','nv-fotoDespuesPreview'].forEach(id => document.getElementById(id).classList.add('hidden'));
-    fotoAntesTemp = ''; fotoDespuesTemp = '';
+    document.getElementById('nv-abono').value = 0;
+    fotosAntesTemp = []; fotosDespuesTemp = [];
+    pintarPreviewFotos('nv-fotoAntesPreview', []);
+    pintarPreviewFotos('nv-fotoDespuesPreview', []);
+    actualizarPendienteCalculado();
     renderVisitas();
     renderFidelizacion();
   });
@@ -917,7 +1050,15 @@
     vacio.classList.toggle('hidden', visitas.length > 0);
     lista.innerHTML = '';
 
+    const paciente = db.pacientes.find(p => p.id === selectedPatientId);
+
     visitas.forEach(v => {
+      const fotosAntes = Array.isArray(v.fotoAntesUrl) ? v.fotoAntesUrl : (v.fotoAntesUrl ? [v.fotoAntesUrl] : []);
+      const fotosDespues = Array.isArray(v.fotoDespuesUrl) ? v.fotoDespuesUrl : (v.fotoDespuesUrl ? [v.fotoDespuesUrl] : []);
+      const tienePdf = v.pdfUrl && v.pdfUrl.startsWith('http');
+      const waTexto = encodeURIComponent(`Hola ${paciente ? paciente.nombre : ''}, aquí está el comprobante de tu consulta del ${v.fecha}: ${v.pdfUrl || ''}`);
+      const waHref = paciente && paciente.telefono ? `https://wa.me/${paciente.telefono.replace(/\D/g,'')}?text=${waTexto}` : '';
+
       const div = document.createElement('div');
       div.className = 'card';
       div.style.marginBottom = '10px';
@@ -927,14 +1068,15 @@
             <b>${v.fecha}</b> — ${v.tratamiento || 'Sin tratamiento especificado'}
             <div class="hint" style="margin:6px 0 0;">${v.notas || ''}</div>
             ${v.receta ? `<div class="hint"><b>Receta:</b> ${v.receta}</div>` : ''}
-            <div class="hint">Pagado: $${v.pagado.toFixed(2)} · Pendiente: $${v.pendiente.toFixed(2)}</div>
+            <div class="hint">Valor tratamiento: $${(v.valorTratamiento||0).toFixed(2)} · Abono: $${(v.abono||0).toFixed(2)} · Pendiente: $${(v.pendiente||0).toFixed(2)}</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
-            <div style="display:flex;gap:6px;">
-              ${v.fotoAntesUrl ? `<img src="${v.fotoAntesUrl}" class="photo-preview photo-click" title="Antes — toca para ampliar" style="max-width:76px;" data-ampliar="${v.fotoAntesUrl}">` : ''}
-              ${v.fotoDespuesUrl ? `<img src="${v.fotoDespuesUrl}" class="photo-preview photo-click" title="Después — toca para ampliar" style="max-width:76px;" data-ampliar="${v.fotoDespuesUrl}">` : ''}
+            <div style="display:flex;gap:6px;flex-wrap:wrap;max-width:200px;justify-content:flex-end;">
+              ${fotosAntes.map(url => `<img src="${url}" class="photo-preview photo-click" title="Antes — toca para ampliar" style="max-width:64px;" data-ampliar="${url}">`).join('')}
+              ${fotosDespues.map(url => `<img src="${url}" class="photo-preview photo-click" title="Después — toca para ampliar" style="max-width:64px;" data-ampliar="${url}">`).join('')}
             </div>
-            ${v.pdfUrl && v.pdfUrl.startsWith('http') ? `<a href="${v.pdfUrl}" target="_blank">Ver PDF guardado</a>` : ''}
+            ${tienePdf ? `<a href="${v.pdfUrl}" target="_blank">Ver PDF guardado</a>` : ''}
+            ${tienePdf && waHref ? `<a href="${waHref}" target="_blank"><button>📲 Enviar por WhatsApp</button></a>` : ''}
             <button data-pdf="${v.id}">Imprimir / PDF local</button>
           </div>
         </div>
@@ -962,6 +1104,8 @@
   function imprimirVisita(visitaId){
     const visita = db.visitas.find(v => v.id === visitaId);
     const paciente = db.pacientes.find(p => p.id === visita.pacienteId);
+    const fotosAntes = Array.isArray(visita.fotoAntesUrl) ? visita.fotoAntesUrl : (visita.fotoAntesUrl ? [visita.fotoAntesUrl] : []);
+    const fotosDespues = Array.isArray(visita.fotoDespuesUrl) ? visita.fotoDespuesUrl : (visita.fotoDespuesUrl ? [visita.fotoDespuesUrl] : []);
     const printArea = document.getElementById('printArea');
     printArea.innerHTML = `
       <h2>Comprobante de tratamiento</h2>
@@ -970,9 +1114,9 @@
       <p class="pline"><b>Tratamiento:</b> ${visita.tratamiento || '—'}</p>
       <p class="pline"><b>Notas:</b> ${visita.notas || '—'}</p>
       <p class="pline"><b>Receta:</b> ${visita.receta || '—'}</p>
-      <p class="pline"><b>Pagado:</b> $${visita.pagado.toFixed(2)} &nbsp; <b>Pendiente:</b> $${visita.pendiente.toFixed(2)}</p>
-      ${visita.fotoAntesUrl ? `<p class="pline"><b>Foto antes:</b></p><img src="${visita.fotoAntesUrl}" style="max-width:260px;">` : ''}
-      ${visita.fotoDespuesUrl ? `<p class="pline"><b>Foto después:</b></p><img src="${visita.fotoDespuesUrl}" style="max-width:260px;">` : ''}
+      <p class="pline"><b>Valor del tratamiento:</b> $${(visita.valorTratamiento||0).toFixed(2)} &nbsp; <b>Abono de hoy:</b> $${(visita.abono||0).toFixed(2)} &nbsp; <b>Pendiente:</b> $${(visita.pendiente||0).toFixed(2)}</p>
+      ${fotosAntes.length ? `<p class="pline"><b>Fotos antes:</b></p>${fotosAntes.map(u=>`<img src="${u}" style="max-width:180px;margin:4px;">`).join('')}` : ''}
+      ${fotosDespues.length ? `<p class="pline"><b>Fotos después:</b></p>${fotosDespues.map(u=>`<img src="${u}" style="max-width:180px;margin:4px;">`).join('')}` : ''}
     `;
     window.print();
   }
@@ -998,6 +1142,38 @@
       dots.appendChild(dot);
     }
   }
+
+  // ---------- CONFIGURACIÓN ----------
+  function renderConfiguracion(){
+    document.getElementById('cfg-correo').value = (db.config && db.config.correoNotificaciones) || '';
+  }
+
+  document.getElementById('btnGuardarCorreo').addEventListener('click', () => {
+    const correo = document.getElementById('cfg-correo').value.trim();
+    if(!db.config) db.config = { correoNotificaciones: '' };
+    db.config.correoNotificaciones = correo;
+    saveDB();
+    encolarYSincronizar('guardarConfiguracion', { correoNotificaciones: correo });
+    alert('Correo guardado.');
+  });
+
+  document.getElementById('btnDescargarExcel').addEventListener('click', () => {
+    if(typeof XLSX === 'undefined'){
+      alert('No se pudo cargar la herramienta de Excel (revisa tu conexión a internet).');
+      return;
+    }
+    const filas = db.pacientes.map(p => ({
+      Nombre: p.nombre || '', Sexo: p.sexo || '', Edad: p.edad || '',
+      'C.I./Pasaporte': p.ci || '', Teléfono: p.telefono || '',
+      'Fecha nacimiento': p.fechaNacimiento || '', 'Motivo de consulta': p.motivoConsulta || '',
+      'Valor tratamiento': p.valorTratamiento || 0,
+      'Total abonado': db.visitas.filter(v => v.pacienteId === p.id).reduce((s,v) => s + (Number(v.abono)||0), 0),
+    }));
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, 'Pacientes');
+    XLSX.writeFile(libro, 'pacientes_' + new Date().toISOString().slice(0,10) + '.xlsx');
+  });
 
   // ---------- MODO OSCURO (manual, se guarda la preferencia) ----------
   const THEME_KEY = 'clinica_dental_theme';
