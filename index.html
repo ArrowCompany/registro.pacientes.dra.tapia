@@ -75,6 +75,9 @@
     font-size:14.5px; background:var(--surface); color:var(--ink); width:100%;
   }
   .field textarea{ resize:vertical; min-height:64px; font-family:inherit; }
+  .field input:disabled, .field textarea:disabled{ background:var(--cream); color:var(--ink-soft); cursor:not-allowed; }
+  .checkline input:disabled{ cursor:not-allowed; }
+  .checkline:has(input:disabled){ color:var(--ink-soft); }
   .checkline{
     display:flex; align-items:center; gap:7px; font-size:13.5px; color:var(--ink);
   }
@@ -159,6 +162,13 @@
   .loyalty-dot.reward{ background:#FBEBD2; color:var(--warn); border-color:#F0D9AC; }
 
   .photo-preview{ max-width:160px; border-radius:8px; margin-top:8px; border:1px solid var(--line); }
+  .photo-click{ cursor:zoom-in; }
+  .lightbox-overlay{
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.82); z-index:50;
+    align-items:center; justify-content:center; padding:24px;
+  }
+  .lightbox-overlay.show{ display:flex; }
+  .lightbox-overlay img{ max-width:100%; max-height:100%; border-radius:10px; }
 
   .hidden{ display:none !important; }
 
@@ -287,7 +297,10 @@
         <div class="section-title">Examen del sistema estomatognático</div>
         <div class="field-grid" id="fc-examen"></div>
 
-        <div class="btn-row"><button class="primary" id="btnGuardarFicha">Guardar ficha</button></div>
+        <div class="btn-row">
+          <button class="primary" id="btnGuardarFicha">Guardar ficha</button>
+          <button id="btnEditarFicha" class="hidden">Editar ficha</button>
+        </div>
       </div>
 
       <div class="card">
@@ -347,6 +360,10 @@
 </main>
 
 <div class="print-area" id="printArea"></div>
+
+<div class="lightbox-overlay" id="lightboxOverlay">
+  <img id="lightboxImg" alt="Foto ampliada">
+</div>
 
 <script>
   // Pega aquí la URL de despliegue de tu Apps Script (termina en /exec)
@@ -792,10 +809,33 @@
       input.value = (paciente.examen || {})[input.dataset.exam] || '';
     });
 
+    const tieneDatos = !!(
+      paciente.motivoConsulta ||
+      Object.values(paciente.antecedentes || {}).some(Boolean) ||
+      Object.values(paciente.signosVitales || {}).some(v => v) ||
+      Object.values(paciente.examen || {}).some(v => v)
+    );
+    setFichaEditable(!tieneDatos);
+
+    if(!document.getElementById('nv-fecha').value){
+      document.getElementById('nv-fecha').value = new Date().toISOString().slice(0,10);
+    }
     renderOdontograma(selectedPatientId);
     renderVisitas();
     renderFidelizacion();
   }
+
+  function setFichaEditable(editable){
+    const campos = [
+      ...document.querySelectorAll('#fc-motivo, #fc-presion, #fc-frecCardiaca, #fc-frecResp, #fc-temperatura, #fc-glicemia'),
+      ...document.querySelectorAll('[data-ant], [data-exam]')
+    ];
+    campos.forEach(campo => campo.disabled = !editable);
+    document.getElementById('btnGuardarFicha').classList.toggle('hidden', !editable);
+    document.getElementById('btnEditarFicha').classList.toggle('hidden', editable);
+  }
+
+  document.getElementById('btnEditarFicha').addEventListener('click', () => setFichaEditable(true));
 
   document.getElementById('btnGuardarFicha').addEventListener('click', () => {
     const paciente = db.pacientes.find(p => p.id === selectedPatientId);
@@ -814,6 +854,7 @@
     document.querySelectorAll('[data-exam]').forEach(input => paciente.examen[input.dataset.exam] = input.value);
     saveDB();
     encolarYSincronizar('guardarPaciente', paciente);
+    setFichaEditable(false);
     alert('Ficha guardada.');
   });
 
@@ -860,7 +901,8 @@
       fotoDespuesBase64: fotoDespuesTemp
     });
 
-    ['nv-fecha','nv-tratamiento','nv-pagado','nv-pendiente','nv-notas','nv-receta'].forEach(id => document.getElementById(id).value = '');
+    ['nv-tratamiento','nv-pagado','nv-pendiente','nv-notas','nv-receta'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('nv-fecha').value = new Date().toISOString().slice(0,10);
     ['nv-fotoAntes','nv-fotoDespues'].forEach(id => document.getElementById(id).value = '');
     ['nv-fotoAntesPreview','nv-fotoDespuesPreview'].forEach(id => document.getElementById(id).classList.add('hidden'));
     fotoAntesTemp = ''; fotoDespuesTemp = '';
@@ -889,8 +931,8 @@
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
             <div style="display:flex;gap:6px;">
-              ${v.fotoAntesUrl ? `<img src="${v.fotoAntesUrl}" class="photo-preview" title="Antes" style="max-width:76px;">` : ''}
-              ${v.fotoDespuesUrl ? `<img src="${v.fotoDespuesUrl}" class="photo-preview" title="Después" style="max-width:76px;">` : ''}
+              ${v.fotoAntesUrl ? `<img src="${v.fotoAntesUrl}" class="photo-preview photo-click" title="Antes — toca para ampliar" style="max-width:76px;" data-ampliar="${v.fotoAntesUrl}">` : ''}
+              ${v.fotoDespuesUrl ? `<img src="${v.fotoDespuesUrl}" class="photo-preview photo-click" title="Después — toca para ampliar" style="max-width:76px;" data-ampliar="${v.fotoDespuesUrl}">` : ''}
             </div>
             ${v.pdfUrl && v.pdfUrl.startsWith('http') ? `<a href="${v.pdfUrl}" target="_blank">Ver PDF guardado</a>` : ''}
             <button data-pdf="${v.id}">Imprimir / PDF local</button>
@@ -903,6 +945,18 @@
     lista.querySelectorAll('[data-pdf]').forEach(btn => {
       btn.addEventListener('click', () => imprimirVisita(btn.dataset.pdf));
     });
+    lista.querySelectorAll('[data-ampliar]').forEach(img => {
+      img.addEventListener('click', () => abrirLightbox(img.dataset.ampliar));
+    });
+  }
+
+  function abrirLightbox(url){
+    document.getElementById('lightboxImg').src = url;
+    document.getElementById('lightboxOverlay').classList.add('show');
+  }
+  function cerrarLightbox(){
+    document.getElementById('lightboxOverlay').classList.remove('show');
+    document.getElementById('lightboxImg').src = '';
   }
 
   function imprimirVisita(visitaId){
@@ -968,6 +1022,8 @@
       aplicarTema(nuevo);
     });
   }
+
+  document.getElementById('lightboxOverlay').addEventListener('click', cerrarLightbox);
 
   // ---------- INIT ----------
   initTema();
