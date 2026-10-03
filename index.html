@@ -300,6 +300,7 @@
       <p class="pl-hint">Cada visita realizada suma un punto a la tarjeta (5 visitas = limpieza gratis).</p>
       <div class="pl-head"><div>Paciente</div><div>Último tratamiento</div><div>Progreso tarjeta</div><div>Estado</div></div>
       <div id="listaPacientes"></div>
+      <p class="pl-hint" id="diagPacientes" style="text-align:center;margin-top:12px;"></p>
       <p class="pl-empty hidden" id="pacientesVacio">Aún no hay pacientes registrados.</p>
     </div>
   </section>
@@ -509,7 +510,7 @@
 
   // Normaliza el teléfono para WhatsApp: si empieza en 0 (formato local Ecuador), lo cambia por 593.
   function telefonoWhatsApp(telefono){
-    let limpio = (telefono || '').replace(/\D/g, '');
+    let limpio = String(telefono == null ? '' : telefono).replace(/\D/g, '');
     if(limpio.startsWith('0')) limpio = '593' + limpio.slice(1);
     return limpio;
   }
@@ -585,17 +586,49 @@
     el.classList.toggle('pendiente', pendientes > 0);
   }
 
+  let diagRemoto = 'sin consultar';
+  function unirPorId(local, remoto){
+    const out = Array.isArray(remoto) ? [...remoto] : [];
+    const ids = new Set(out.map(x => x && x.id));
+    (Array.isArray(local) ? local : []).forEach(x => { if(x && !ids.has(x.id)) out.push(x); });
+    return out;
+  }
   async function cargarDesdeBackend(){
     if(!backendConfigurado()) return;
     try{
       const resp = await fetch(CONFIG.APPS_SCRIPT_URL);
-      const remoto = await resp.json();
-      db = { ...defaultDB(), ...remoto };
-      saveDB();
-      renderPacientes();
+      let remoto = await resp.json();
+      if(remoto && remoto.data && typeof remoto.data === 'object' && !Array.isArray(remoto.data)) remoto = remoto.data;
+      const nRemotos = Array.isArray(remoto && remoto.pacientes) ? remoto.pacientes.length : null;
+      diagRemoto = nRemotos === null ? 'respuesta sin lista de pacientes' : nRemotos + ' paciente(s) en el servidor';
+      if(remoto && typeof remoto === 'object'){
+        // Google Sheets devuelve teléfonos/cédulas como número (sin el 0) y fechas con hora: se normalizan.
+        (Array.isArray(remoto.pacientes) ? remoto.pacientes : []).forEach(p => {
+          if(!p) return;
+          ['telefono','ci','edad'].forEach(k => { if(p[k] != null) p[k] = String(p[k]); });
+          if(p.telefono && /^9\d{8}$/.test(p.telefono)) p.telefono = '0' + p.telefono;
+          if(p.ci && /^\d{9}$/.test(p.ci)) p.ci = '0' + p.ci;
+          if(typeof p.fechaNacimiento === 'string') p.fechaNacimiento = p.fechaNacimiento.slice(0,10);
+        });
+        ['citas','visitas'].forEach(t => (Array.isArray(remoto[t]) ? remoto[t] : []).forEach(x => {
+          if(x && typeof x.fecha === 'string') x.fecha = x.fecha.slice(0,10);
+        }));
+        // Se UNE con lo local: nunca se borran pacientes que todavía no terminaron de sincronizar.
+        db = {
+          ...defaultDB(), ...db, ...remoto,
+          pacientes: unirPorId(db.pacientes, remoto.pacientes),
+          citas: unirPorId(db.citas, remoto.citas),
+          visitas: unirPorId(db.visitas, remoto.visitas),
+          odontogramas: { ...(db.odontogramas || {}), ...((remoto.odontogramas && typeof remoto.odontogramas === 'object') ? remoto.odontogramas : {}) },
+          config: { ...(db.config || {}), ...((remoto.config && typeof remoto.config === 'object') ? remoto.config : {}) }
+        };
+        saveDB();
+      }
     }catch(err){
+      diagRemoto = 'no se pudo leer el servidor';
       console.warn('No se pudo cargar desde el backend, se usan los datos locales.', err);
     }
+    try{ renderPacientes(); }catch(e){ console.warn(e); }
   }
 
   window.addEventListener('online', procesarCola);
@@ -663,6 +696,9 @@
       vacio.textContent = 'Aún no hay pacientes registrados.';
     }
 
+    if(!Array.isArray(db.pacientes)) db.pacientes = [];
+    if(!Array.isArray(db.visitas)) db.visitas = [];
+    document.getElementById('diagPacientes').textContent = 'v5 · ' + db.pacientes.length + ' en este dispositivo · ' + diagRemoto;
     document.getElementById('statPacientes').textContent = db.pacientes.length;
     document.getElementById('statVisitas').textContent = db.visitas.length;
     const esc = t => (t || '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -727,16 +763,22 @@
       signosVitales: {},
       examen: {}
     };
-    db.pacientes.push(nuevo);
-    selectedPatientId = nuevo.id;
-    try{ saveDB(); encolarYSincronizar('guardarPaciente', nuevo); }catch(e){ console.warn(e); }
-    ['np-nombre','np-edad','np-ci','np-telefono','np-nacimiento'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('np-sexo').value = '';
-    selectedPatientId = nuevo.id;
-    filtroPacientes = '';
-    document.getElementById('buscarPaciente').value = '';
-    renderPacientes();
+    try{
+      if(!Array.isArray(db.pacientes)) db.pacientes = [];
+      db.pacientes.push(nuevo);
+      selectedPatientId = nuevo.id;
+      saveDB();
+      encolarYSincronizar('guardarPaciente', nuevo);
+    }catch(e){ console.warn(e); }
+    try{
+      ['np-nombre','np-edad','np-ci','np-telefono','np-nacimiento'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('np-sexo').value = '';
+      filtroPacientes = '';
+      document.getElementById('buscarPaciente').value = '';
+      renderPacientes();
+    }catch(e){ console.warn(e); }
     // Abre automáticamente la historia clínica del paciente recién registrado
+    selectedPatientId = nuevo.id;
     document.querySelector('.tab-btn[data-tab="historia"]').click();
     window.scrollTo(0, 0);
   });
