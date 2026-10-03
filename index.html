@@ -240,6 +240,12 @@
     .pl-row{ grid-template-columns:1fr 1fr; }
     .pl-row > :first-child{ grid-column:1 / -1; }
   }
+  .consulta-ok{ margin-top:14px; padding:14px; border-radius:14px; background:#E6F5EC; border:1px solid #BFE3CD; }
+  .consulta-ok.pendiente{ background:#FBEBD2; border-color:#F0D9AC; }
+  .consulta-ok-msg{ font-weight:700; color:#1E7A46; margin-bottom:10px; }
+  .consulta-ok.pendiente .consulta-ok-msg{ color:var(--warn); }
+  .wa-btn{ background:#25D366; color:#fff; border:none; border-radius:999px; padding:11px 18px; font-size:15px; font-weight:700; cursor:pointer; }
+  .consulta-ok.hidden{ display:none; }
 </style>
 </head>
 <body>
@@ -440,6 +446,10 @@
           </div>
         </div>
         <div class="btn-row"><button class="primary" id="btnGuardarVisita">Guardar consulta</button></div>
+        <div class="consulta-ok hidden" id="consultaGuardadaBox">
+          <div class="consulta-ok-msg" id="consultaGuardadaMsg"></div>
+          <button class="wa-btn" id="btnEnviarConsultaWA" type="button">📲 Enviar por WhatsApp</button>
+        </div>
       </div>
 
       <div class="card">
@@ -548,6 +558,7 @@
             if(data.data.pdfUrl) visita.pdfUrl = data.data.pdfUrl;
             saveDB();
             if(document.getElementById('view-historia').classList.contains('active')) renderVisitas();
+            if(visita.id === ultimaVisitaGuardadaId) actualizarAvisoConsulta();
           }
         }
 
@@ -722,7 +733,12 @@
     ['np-nombre','np-edad','np-ci','np-telefono','np-nacimiento'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('np-sexo').value = '';
     selectedPatientId = nuevo.id;
+    filtroPacientes = '';
+    document.getElementById('buscarPaciente').value = '';
     renderPacientes();
+    // Abre automáticamente la historia clínica del paciente recién registrado
+    document.querySelector('.tab-btn[data-tab="historia"]').click();
+    window.scrollTo(0, 0);
   });
 
   // ---------- AGENDA ----------
@@ -1125,6 +1141,35 @@
   document.getElementById('nv-valorTratamiento').addEventListener('input', actualizarPendienteCalculado);
   document.getElementById('nv-abono').addEventListener('input', actualizarPendienteCalculado);
 
+  // ---------- AVISO "CONSULTA GUARDADA" + BOTÓN WHATSAPP ----------
+  let ultimaVisitaGuardadaId = null;
+  function actualizarAvisoConsulta(){
+    const box = document.getElementById('consultaGuardadaBox');
+    const visita = db.visitas.find(v => v.id === ultimaVisitaGuardadaId);
+    if(!visita || visita.pacienteId !== selectedPatientId){ box.classList.add('hidden'); return; }
+    const paciente = db.pacientes.find(p => p.id === visita.pacienteId);
+    const enDrive = visita.pdfUrl && visita.pdfUrl.startsWith('http');
+    box.classList.remove('hidden');
+    box.classList.toggle('pendiente', !enDrive);
+    document.getElementById('consultaGuardadaMsg').textContent = enDrive
+      ? '✅ Consulta guardada en el Drive'
+      : (backendConfigurado() && navigator.onLine
+          ? '⏳ Consulta guardada. Subiendo al Drive…'
+          : '⚠️ Consulta guardada en el panel. Se subirá al Drive cuando haya conexión.');
+    document.getElementById('btnEnviarConsultaWA').classList.toggle('hidden', !(paciente && paciente.telefono));
+  }
+
+  document.getElementById('btnEnviarConsultaWA').addEventListener('click', () => {
+    const visita = db.visitas.find(v => v.id === ultimaVisitaGuardadaId);
+    const paciente = visita && db.pacientes.find(p => p.id === visita.pacienteId);
+    if(!visita || !paciente || !paciente.telefono) return;
+    const enDrive = visita.pdfUrl && visita.pdfUrl.startsWith('http');
+    const texto = enDrive
+      ? `Hola ${paciente.nombre}, aquí está el comprobante de tu consulta del ${visita.fecha}: ${visita.pdfUrl}`
+      : `Hola ${paciente.nombre}, resumen de tu consulta del ${visita.fecha}: ${visita.tratamiento || 'consulta'}. Abono: $${(visita.abono||0).toFixed(2)}. Pendiente: $${(visita.pendiente||0).toFixed(2)}.`;
+    window.open(`https://wa.me/${telefonoWhatsApp(paciente.telefono)}?text=${encodeURIComponent(texto)}`, '_blank');
+  });
+
   document.getElementById('btnGuardarVisita').addEventListener('click', () => {
     const paciente = db.pacientes.find(p => p.id === selectedPatientId);
     if(!paciente) return;
@@ -1154,6 +1199,7 @@
     };
     db.visitas.push(nuevaVisita);
     saveDB();
+    ultimaVisitaGuardadaId = nuevaVisita.id;
     encolarYSincronizar('guardarVisita', {
       ...nuevaVisita,
       fotoAntesBase64: [...fotosAntesTemp],
@@ -1190,6 +1236,7 @@
     actualizarPendienteCalculado();
     renderVisitas();
     renderFidelizacion();
+    actualizarAvisoConsulta();
   });
 
   function renderVisitas(){
