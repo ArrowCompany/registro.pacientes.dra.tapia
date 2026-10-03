@@ -205,6 +205,41 @@
       --line:#4A3634; --teal:#E8A4B4; --teal-dark:#F2B8C6; --sano:#3A2B2A;
     }
   }
+
+  /* Lista de pacientes (estilo panel de clientes) */
+  .pl-card{ border-radius:24px; padding:22px 18px; box-shadow:0 10px 30px rgba(0,0,0,0.06); }
+  .pl-title{ font-size:22px; font-weight:800; margin-bottom:14px; }
+  .pl-stats{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+  .pl-stat{ text-align:center; padding:16px 8px; border-radius:18px; background:var(--surface);
+    border:1px solid var(--line); border-top:4px solid var(--teal); box-shadow:0 4px 14px rgba(0,0,0,0.05); }
+  .pl-stat b{ display:block; font-size:34px; font-weight:800; color:var(--teal-dark); line-height:1.1; }
+  .pl-stat span{ font-size:14px; color:var(--ink-soft); }
+  .pl-search{ width:100%; padding:13px 16px 13px 44px; border-radius:16px; border:1.5px solid var(--line);
+    font-size:16px; background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%238A7A74' stroke-width='2' stroke-linecap='round' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 14px center;
+    color:var(--ink); margin:0 0 10px; outline:none; }
+  .pl-search:focus{ border-color:var(--teal); }
+  .pl-hint{ font-size:13px; color:var(--ink-soft); margin:0 0 10px; }
+  .pl-head, .pl-row{ display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); gap:10px; align-items:center; }
+  .pl-head{ font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft);
+    padding:8px 4px; border-bottom:1px solid var(--line); }
+  .pl-row{ padding:14px 4px; border-bottom:1px solid var(--line); }
+  .pl-name{ font-weight:700; font-size:15.5px; overflow-wrap:anywhere; }
+  .pl-sub{ font-size:12.5px; color:var(--ink-soft); overflow-wrap:anywhere; }
+  .pl-last{ font-size:13.5px; } .pl-last.none{ color:var(--ink-soft); }
+  .pl-dots{ display:flex; gap:4px; flex-wrap:wrap; margin-bottom:3px; }
+  .pl-dot{ width:12px; height:12px; border-radius:50%; background:var(--line); }
+  .pl-dot.on{ background:var(--teal); }
+  .pl-count{ font-size:12px; color:var(--ink-soft); }
+  .pl-badge{ display:inline-block; padding:5px 11px; border-radius:999px; font-size:12.5px; font-weight:700;
+    background:#E6F5EC; color:#1E7A46; margin-bottom:4px; }
+  .pl-badge.ok{ background:#FBEBD2; color:var(--warn); }
+  .pl-link{ display:block; background:none; border:none; padding:2px 0; font-size:13px; font-weight:700; color:var(--teal-dark); cursor:pointer; text-align:left; text-decoration:none; }
+  .pl-empty{ text-align:center; color:var(--ink-soft); padding:22px 0 6px; font-size:14px; }
+  @media (max-width:560px){
+    .pl-head{ display:none; }
+    .pl-row{ grid-template-columns:1fr 1fr; }
+    .pl-row > :first-child{ grid-column:1 / -1; }
+  }
 </style>
 </head>
 <body>
@@ -249,14 +284,17 @@
       </div>
     </div>
 
-    <div class="card">
-      <h2>Pacientes registrados</h2>
-      <input type="text" id="buscarPaciente" class="search-input" placeholder="🔍 Buscar por nombre, cédula o teléfono">
-      <table>
-        <thead><tr><th>Nombre</th><th>Edad</th><th>Teléfono</th><th>Enlace WhatsApp</th><th></th></tr></thead>
-        <tbody id="tablaPacientes"></tbody>
-      </table>
-      <p class="empty-row hidden" id="pacientesVacio">Aún no hay pacientes registrados.</p>
+    <div class="card pl-card">
+      <div class="pl-title">Pacientes registrados</div>
+      <div class="pl-stats">
+        <div class="pl-stat"><b id="statPacientes">0</b><span>Pacientes</span></div>
+        <div class="pl-stat"><b id="statVisitas">0</b><span>Visitas</span></div>
+      </div>
+      <input type="text" id="buscarPaciente" class="pl-search" placeholder="Buscar por nombre, cédula o teléfono..." autocomplete="off">
+      <p class="pl-hint">Cada visita realizada suma un punto a la tarjeta (5 visitas = limpieza gratis).</p>
+      <div class="pl-head"><div>Paciente</div><div>Último tratamiento</div><div>Progreso tarjeta</div><div>Estado</div></div>
+      <div id="listaPacientes"></div>
+      <p class="pl-empty hidden" id="pacientesVacio">Aún no hay pacientes registrados.</p>
     </div>
   </section>
 
@@ -599,10 +637,8 @@
   // ---------- PACIENTES ----------
   let filtroPacientes = '';
   function renderPacientes(){
-    const tbody = document.getElementById('tablaPacientes');
     const vacio = document.getElementById('pacientesVacio');
-    tbody.innerHTML = '';
-
+    
     const termino = normalizar(filtroPacientes);
     const listaFiltrada = termino
       ? db.pacientes.filter(p => normalizar(p.nombre).includes(termino) || normalizar(p.ci).includes(termino) || normalizar(p.telefono).includes(termino))
@@ -616,20 +652,35 @@
       vacio.textContent = 'Aún no hay pacientes registrados.';
     }
 
+    document.getElementById('statPacientes').textContent = db.pacientes.length;
+    document.getElementById('statVisitas').textContent = db.visitas.length;
+    const esc = t => (t || '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const lista = document.getElementById('listaPacientes');
+    lista.innerHTML = '';
     listaFiltrada.forEach(p => {
-      const tr = document.createElement('tr');
+      const visitasP = db.visitas.filter(v => v.pacienteId === p.id).sort((x,y) => (y.fecha || '').localeCompare(x.fecha || ''));
+      const total = visitasP.length;
+      const enCiclo = total % VISITAS_POR_BENEFICIO;
+      const completa = total > 0 && enCiclo === 0;
+      const llenos = completa ? VISITAS_POR_BENEFICIO : enCiclo;
+      const ultimo = visitasP[0] && (visitasP[0].tratamiento || 'Visita registrada');
+      const dots = Array.from({length: VISITAS_POR_BENEFICIO}, (_, i) => `<span class="pl-dot${i < llenos ? ' on' : ''}"></span>`).join('');
       const waText = encodeURIComponent(`Hola ${p.nombre}, aquí está tu enlace para ver tu historial y tarjeta de fidelización: [pendiente de publicar la vista del paciente]`);
-      tr.innerHTML = `
-        <td>${p.nombre || '—'}</td>
-        <td>${p.edad || '—'}</td>
-        <td>${p.telefono || '—'}</td>
-        <td>${p.telefono ? `<a href="https://wa.me/${telefonoWhatsApp(p.telefono)}?text=${waText}" target="_blank">Abrir WhatsApp</a>` : '—'}</td>
-        <td><button data-ver="${p.id}">Ver historia</button></td>
-      `;
-      tbody.appendChild(tr);
+      const row = document.createElement('div');
+      row.className = 'pl-row';
+      row.innerHTML = `
+        <div><div class="pl-name">${esc(p.nombre) || '—'}</div><div class="pl-sub">${esc(p.telefono) || esc(p.ci) || ''}</div></div>
+        <div class="pl-last${ultimo ? '' : ' none'}">${ultimo ? esc(ultimo) : 'Sin servicios'}</div>
+        <div><div class="pl-dots">${dots}</div><div class="pl-count">${llenos}/${VISITAS_POR_BENEFICIO}</div></div>
+        <div>
+          <span class="pl-badge${completa ? ' ok' : ''}">${completa ? 'Beneficio' : 'En progreso'}</span>
+          <button class="pl-link" data-ver="${p.id}">Ver historia</button>
+          ${p.telefono ? `<a class="pl-link" href="https://wa.me/${telefonoWhatsApp(p.telefono)}?text=${waText}" target="_blank">WhatsApp</a>` : ''}
+        </div>`;
+      lista.appendChild(row);
     });
 
-    tbody.querySelectorAll('[data-ver]').forEach(btn => {
+    lista.querySelectorAll('[data-ver]').forEach(btn => {
       btn.addEventListener('click', () => {
         selectedPatientId = btn.dataset.ver;
         document.querySelector('.tab-btn[data-tab="historia"]').click();
