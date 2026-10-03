@@ -504,7 +504,7 @@
     try{ return { ...defaultDB(), ...JSON.parse(localStorage.getItem(DB_KEY)) }; }
     catch(e){ return defaultDB(); }
   }
-  function saveDB(){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+  function saveDB(){ try{ localStorage.setItem(DB_KEY, JSON.stringify(db)); }catch(e){ console.warn('No se pudo guardar localmente (almacenamiento lleno):', e); } }
   function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
   // Normaliza el teléfono para WhatsApp: si empieza en 0 (formato local Ecuador), lo cambia por 593.
@@ -524,7 +524,7 @@
   function loadQueue(){
     try{ return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; } catch(e){ return []; }
   }
-  function saveQueue(q){ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); actualizarIndicadorSync(); }
+  function saveQueue(q){ try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }catch(e){ console.warn('Cola no guardada localmente:', e); } actualizarIndicadorSync(); }
 
   function encolarYSincronizar(action, payload){
     const queue = loadQueue();
@@ -728,8 +728,8 @@
       examen: {}
     };
     db.pacientes.push(nuevo);
-    saveDB();
-    encolarYSincronizar('guardarPaciente', nuevo);
+    selectedPatientId = nuevo.id;
+    try{ saveDB(); encolarYSincronizar('guardarPaciente', nuevo); }catch(e){ console.warn(e); }
     ['np-nombre','np-edad','np-ci','np-telefono','np-nacimiento'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('np-sexo').value = '';
     selectedPatientId = nuevo.id;
