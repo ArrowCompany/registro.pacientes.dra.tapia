@@ -840,16 +840,19 @@
   function mostrarResultadosHistoria(termino){
     const t = normalizar(termino);
     const coincidencias = t
-      ? db.pacientes.filter(p => normalizar(p.nombre).includes(t))
+      ? db.pacientes.filter(p =>
+          normalizar(p.nombre).includes(t) ||
+          normalizar(p.ci).includes(t) ||
+          normalizar(p.telefono).includes(t)
+        )
       : db.pacientes;
 
     resultadosHistoria.innerHTML = coincidencias.length
-      ? coincidencias.map(p => `<div class="item" data-id="${p.id}">${p.nombre || 'Sin nombre'}</div>`).join('')
+      ? coincidencias.map(p => `<div class="item" data-id="${p.id}">${p.nombre || 'Sin nombre'}${p.telefono ? ` <span style="color:var(--ink-soft);font-size:12.5px;">— ${p.telefono}</span>` : ''}</div>`).join('')
       : '<div class="item empty">Sin resultados</div>';
 
     resultadosHistoria.querySelectorAll('[data-id]').forEach(el => {
-      el.addEventListener('mousedown', (ev) => {
-        ev.preventDefault(); // evita que el blur del input cierre la lista antes del click
+      el.addEventListener('click', () => {
         selectedPatientId = el.dataset.id;
         inputBuscarHistoria.value = '';
         resultadosHistoria.classList.remove('show');
@@ -862,8 +865,12 @@
 
   inputBuscarHistoria.addEventListener('input', (e) => mostrarResultadosHistoria(e.target.value));
   inputBuscarHistoria.addEventListener('focus', (e) => mostrarResultadosHistoria(e.target.value));
-  inputBuscarHistoria.addEventListener('blur', () => {
-    setTimeout(() => resultadosHistoria.classList.remove('show'), 120);
+
+  // Cerrar la lista al tocar/hacer clic afuera — funciona igual con mouse (compu) y con toques (celular/tablet).
+  document.addEventListener('click', (e) => {
+    if(!e.target.closest('.patient-search-wrap')){
+      resultadosHistoria.classList.remove('show');
+    }
   });
 
   // El link del paciente asume que paciente.html está subido en la misma carpeta que este panel.
