@@ -152,6 +152,7 @@
   /* Odontograma */
   .arch-label{ font-size:13px; font-weight:600; color:var(--ink-soft); margin:14px 0 8px; }
   .arch-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:6px; }
+  .arch-sticky{ position:sticky; left:0; width:max-content; }
   .arch-row{ display:flex; gap:7px; width:max-content; }
   .quadrant-gap{ width:1px; background:var(--line); margin:0 5px; align-self:stretch; }
   .tooth-card{ display:flex; flex-direction:column; align-items:center; gap:3px; width:80px; flex:0 0 auto; }
@@ -391,10 +392,12 @@
       <div class="card">
         <h2>Odontograma</h2>
         <p class="hint">Toca cualquier zona con el dedo o el Apple Pencil. Cada toque cicla: sano → caries → tratado → sano.</p>
-        <div class="arch-label">Arcada superior</div>
-        <div class="arch-scroll"><div class="arch-row" id="archUpper"></div></div>
-        <div class="arch-label">Arcada inferior</div>
-        <div class="arch-scroll"><div class="arch-row" id="archLower"></div></div>
+        <div class="arch-scroll" id="archScroll">
+          <div class="arch-label arch-sticky">Arcada superior</div>
+          <div class="arch-row" id="archUpper"></div>
+          <div class="arch-label arch-sticky">Arcada inferior</div>
+          <div class="arch-row" id="archLower"></div>
+        </div>
         <div class="legend">
           <div class="legend-item"><span class="swatch sano"></span>Sano</div>
           <div class="legend-item"><span class="swatch caries"></span>Caries activa</div>
@@ -940,7 +943,18 @@
       if(code === 'GAP'){ const g = document.createElement('div'); g.className='quadrant-gap'; lower.appendChild(g); return; }
       lower.appendChild(buildToothCard(patientId, code));
     });
+    centrarOdontograma();
   }
+
+  // Deja siempre en el centro de la pantalla 11 | 21 (arriba) y 41 | 31 (abajo).
+  function centrarOdontograma(intento = 0){
+    const cont = document.getElementById('archScroll');
+    const gap = document.querySelector('#archUpper .quadrant-gap');
+    if(!cont || !gap) return;
+    if(cont.clientWidth === 0 && intento < 10){ setTimeout(() => centrarOdontograma(intento + 1), 150); return; }
+    cont.scrollLeft = gap.offsetLeft + gap.offsetWidth / 2 - cont.clientWidth / 2;
+  }
+  window.addEventListener('resize', () => centrarOdontograma());
 
   // ---------- HISTORIA CLINICA ----------
   const inputBuscarHistoria = document.getElementById('buscarPacienteHistoria');
