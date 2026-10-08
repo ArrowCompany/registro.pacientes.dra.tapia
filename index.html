@@ -129,6 +129,12 @@
   .icon-btn.hidden{ display:none; }
   .paciente-nombre-grande{ font-size:24px; font-weight:700; margin:0; }
 
+  .resumen-pagos{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .resumen-item{ flex:1; min-width:130px; background:var(--cream); border-radius:10px; padding:12px; text-align:center; }
+  .resumen-item .monto{ font-size:19px; font-weight:800; }
+  .resumen-item .etiqueta{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .resumen-item.pendiente .monto{ color:var(--teal-dark); }
+
   .patient-picker{ display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
   .patient-picker select{ padding:9px 11px; border-radius:8px; border:1px solid var(--line); font-size:14.5px; min-width:220px; }
 
@@ -152,7 +158,6 @@
   /* Odontograma */
   .arch-label{ font-size:13px; font-weight:600; color:var(--ink-soft); margin:14px 0 8px; }
   .arch-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:6px; }
-  .arch-sticky{ position:sticky; left:0; width:max-content; }
   .arch-row{ display:flex; gap:7px; width:max-content; }
   .quadrant-gap{ width:1px; background:var(--line); margin:0 5px; align-self:stretch; }
   .tooth-card{ display:flex; flex-direction:column; align-items:center; gap:3px; width:80px; flex:0 0 auto; }
@@ -206,47 +211,6 @@
       --line:#4A3634; --teal:#E8A4B4; --teal-dark:#F2B8C6; --sano:#3A2B2A;
     }
   }
-
-  /* Lista de pacientes (estilo panel de clientes) */
-  .pl-card{ border-radius:24px; padding:22px 18px; box-shadow:0 10px 30px rgba(0,0,0,0.06); }
-  .pl-title{ font-size:22px; font-weight:800; margin-bottom:14px; }
-  .pl-stats{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
-  .pl-stat{ text-align:center; padding:16px 8px; border-radius:18px; background:var(--surface);
-    border:1px solid var(--line); border-top:4px solid var(--teal); box-shadow:0 4px 14px rgba(0,0,0,0.05); }
-  .pl-stat b{ display:block; font-size:34px; font-weight:800; color:var(--teal-dark); line-height:1.1; }
-  .pl-stat span{ font-size:14px; color:var(--ink-soft); }
-  .pl-search{ width:100%; padding:13px 16px 13px 44px; border-radius:16px; border:1.5px solid var(--line);
-    font-size:16px; background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%238A7A74' stroke-width='2' stroke-linecap='round' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 14px center;
-    color:var(--ink); margin:0 0 10px; outline:none; }
-  .pl-search:focus{ border-color:var(--teal); }
-  .pl-hint{ font-size:13px; color:var(--ink-soft); margin:0 0 10px; }
-  .pl-head, .pl-row{ display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); gap:10px; align-items:center; }
-  .pl-head{ font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft);
-    padding:8px 4px; border-bottom:1px solid var(--line); }
-  .pl-row{ padding:14px 4px; border-bottom:1px solid var(--line); }
-  .pl-name{ font-weight:700; font-size:15.5px; overflow-wrap:anywhere; }
-  .pl-sub{ font-size:12.5px; color:var(--ink-soft); overflow-wrap:anywhere; }
-  .pl-last{ font-size:13.5px; } .pl-last.none{ color:var(--ink-soft); }
-  .pl-dots{ display:flex; gap:4px; flex-wrap:wrap; margin-bottom:3px; }
-  .pl-dot{ width:12px; height:12px; border-radius:50%; background:var(--line); }
-  .pl-dot.on{ background:var(--teal); }
-  .pl-count{ font-size:12px; color:var(--ink-soft); }
-  .pl-badge{ display:inline-block; padding:5px 11px; border-radius:999px; font-size:12.5px; font-weight:700;
-    background:#E6F5EC; color:#1E7A46; margin-bottom:4px; }
-  .pl-badge.ok{ background:#FBEBD2; color:var(--warn); }
-  .pl-link{ display:block; background:none; border:none; padding:2px 0; font-size:13px; font-weight:700; color:var(--teal-dark); cursor:pointer; text-align:left; text-decoration:none; }
-  .pl-empty{ text-align:center; color:var(--ink-soft); padding:22px 0 6px; font-size:14px; }
-  @media (max-width:560px){
-    .pl-head{ display:none; }
-    .pl-row{ grid-template-columns:1fr 1fr; }
-    .pl-row > :first-child{ grid-column:1 / -1; }
-  }
-  .consulta-ok{ margin-top:14px; padding:14px; border-radius:14px; background:#E6F5EC; border:1px solid #BFE3CD; }
-  .consulta-ok.pendiente{ background:#FBEBD2; border-color:#F0D9AC; }
-  .consulta-ok-msg{ font-weight:700; color:#1E7A46; margin-bottom:10px; }
-  .consulta-ok.pendiente .consulta-ok-msg{ color:var(--warn); }
-  .wa-btn{ background:#25D366; color:#fff; border:none; border-radius:999px; padding:11px 18px; font-size:15px; font-weight:700; cursor:pointer; }
-  .consulta-ok.hidden{ display:none; }
 </style>
 </head>
 <body>
@@ -291,18 +255,14 @@
       </div>
     </div>
 
-    <div class="card pl-card">
-      <div class="pl-title">Pacientes registrados</div>
-      <div class="pl-stats">
-        <div class="pl-stat"><b id="statPacientes">0</b><span>Pacientes</span></div>
-        <div class="pl-stat"><b id="statVisitas">0</b><span>Visitas</span></div>
-      </div>
-      <input type="text" id="buscarPaciente" class="pl-search" placeholder="Buscar por nombre, cédula o teléfono..." autocomplete="off">
-      <p class="pl-hint">Cada visita realizada suma un punto a la tarjeta (5 visitas = limpieza gratis).</p>
-      <div class="pl-head"><div>Paciente</div><div>Último tratamiento</div><div>Progreso tarjeta</div><div>Estado</div></div>
-      <div id="listaPacientes"></div>
-      <p class="pl-hint" id="diagPacientes" style="text-align:center;margin-top:12px;"></p>
-      <p class="pl-empty hidden" id="pacientesVacio">Aún no hay pacientes registrados.</p>
+    <div class="card">
+      <h2>Pacientes registrados</h2>
+      <input type="text" id="buscarPaciente" class="search-input" placeholder="🔍 Buscar por nombre, cédula o teléfono">
+      <table>
+        <thead><tr><th>Nombre</th><th>Edad</th><th>Teléfono</th><th>Enlace WhatsApp</th><th></th></tr></thead>
+        <tbody id="tablaPacientes"></tbody>
+      </table>
+      <p class="empty-row hidden" id="pacientesVacio">Aún no hay pacientes registrados.</p>
     </div>
   </section>
 
@@ -357,6 +317,16 @@
     <div id="historiaContenido" class="hidden">
 
       <div class="card">
+        <h2 style="margin:0 0 4px;font-size:15px;">Resumen de lo realizado</h2>
+        <p class="hint" style="margin:0;" id="resumenVisitasTexto"></p>
+        <div class="resumen-pagos">
+          <div class="resumen-item"><div class="monto" id="resumenValorTratamiento">$0.00</div><div class="etiqueta">Valor tratamiento</div></div>
+          <div class="resumen-item"><div class="monto" id="resumenAbonado">$0.00</div><div class="etiqueta">Total abonado</div></div>
+          <div class="resumen-item pendiente"><div class="monto" id="resumenPendiente">$0.00</div><div class="etiqueta">Pendiente</div></div>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-header-toggle" id="fichaHeaderToggle">
           <h2>Ficha clínica</h2>
           <div style="display:flex;align-items:center;gap:12px;">
@@ -392,12 +362,10 @@
       <div class="card">
         <h2>Odontograma</h2>
         <p class="hint">Toca cualquier zona con el dedo o el Apple Pencil. Cada toque cicla: sano → caries → tratado → sano.</p>
-        <div class="arch-scroll" id="archScroll">
-          <div class="arch-label arch-sticky">Arcada superior</div>
-          <div class="arch-row" id="archUpper"></div>
-          <div class="arch-label arch-sticky">Arcada inferior</div>
-          <div class="arch-row" id="archLower"></div>
-        </div>
+        <div class="arch-label">Arcada superior</div>
+        <div class="arch-scroll"><div class="arch-row" id="archUpper"></div></div>
+        <div class="arch-label">Arcada inferior</div>
+        <div class="arch-scroll"><div class="arch-row" id="archLower"></div></div>
         <div class="legend">
           <div class="legend-item"><span class="swatch sano"></span>Sano</div>
           <div class="legend-item"><span class="swatch caries"></span>Caries activa</div>
@@ -450,9 +418,9 @@
           </div>
         </div>
         <div class="btn-row"><button class="primary" id="btnGuardarVisita">Guardar consulta</button></div>
-        <div class="consulta-ok hidden" id="consultaGuardadaBox">
-          <div class="consulta-ok-msg" id="consultaGuardadaMsg"></div>
-          <button class="wa-btn" id="btnEnviarConsultaWA" type="button">📲 Enviar por WhatsApp</button>
+        <div class="card hidden" id="confirmacionGuardado" style="background:var(--cream);margin-top:14px;">
+          <p style="margin:0 0 10px;font-weight:600;">✅ Consulta guardada.</p>
+          <a id="linkWhatsAppConsulta" href="#" target="_blank"><button class="primary" style="background:#25D366;border-color:#25D366;">📲 Enviar link al paciente por WhatsApp</button></a>
         </div>
       </div>
 
@@ -508,12 +476,12 @@
     try{ return { ...defaultDB(), ...JSON.parse(localStorage.getItem(DB_KEY)) }; }
     catch(e){ return defaultDB(); }
   }
-  function saveDB(){ try{ localStorage.setItem(DB_KEY, JSON.stringify(db)); }catch(e){ console.warn('No se pudo guardar localmente (almacenamiento lleno):', e); } }
+  function saveDB(){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
   function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
   // Normaliza el teléfono para WhatsApp: si empieza en 0 (formato local Ecuador), lo cambia por 593.
   function telefonoWhatsApp(telefono){
-    let limpio = String(telefono == null ? '' : telefono).replace(/\D/g, '');
+    let limpio = (telefono || '').replace(/\D/g, '');
     if(limpio.startsWith('0')) limpio = '593' + limpio.slice(1);
     return limpio;
   }
@@ -528,7 +496,7 @@
   function loadQueue(){
     try{ return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; } catch(e){ return []; }
   }
-  function saveQueue(q){ try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }catch(e){ console.warn('Cola no guardada localmente:', e); } actualizarIndicadorSync(); }
+  function saveQueue(q){ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); actualizarIndicadorSync(); }
 
   function encolarYSincronizar(action, payload){
     const queue = loadQueue();
@@ -562,15 +530,24 @@
             if(data.data.pdfUrl) visita.pdfUrl = data.data.pdfUrl;
             saveDB();
             if(document.getElementById('view-historia').classList.contains('active')) renderVisitas();
-            if(visita.id === ultimaVisitaGuardadaId) actualizarAvisoConsulta();
           }
         }
 
         queue.shift();
         saveQueue(queue);
       }catch(err){
-        console.warn('No se pudo sincronizar, se reintentará automáticamente:', err);
-        break;
+        console.warn('No se pudo sincronizar:', err);
+        item.intentos = (item.intentos || 0) + 1;
+        if(item.intentos >= 5){
+          // Tras 5 intentos fallidos, se deja de bloquear la cola con este envío (los demás sí se sincronizan).
+          console.error('Se descartó un envío tras 5 intentos fallidos:', item);
+          queue.shift();
+          saveQueue(queue);
+          continue;
+        }
+        queue[0] = item;
+        saveQueue(queue);
+        break; // se reintenta este mismo envío más tarde, sin bloquear si ya se agotaron los intentos
       }
     }
     sincronizando = false;
@@ -589,49 +566,17 @@
     el.classList.toggle('pendiente', pendientes > 0);
   }
 
-  let diagRemoto = 'sin consultar';
-  function unirPorId(local, remoto){
-    const out = Array.isArray(remoto) ? [...remoto] : [];
-    const ids = new Set(out.map(x => x && x.id));
-    (Array.isArray(local) ? local : []).forEach(x => { if(x && !ids.has(x.id)) out.push(x); });
-    return out;
-  }
   async function cargarDesdeBackend(){
     if(!backendConfigurado()) return;
     try{
       const resp = await fetch(CONFIG.APPS_SCRIPT_URL);
-      let remoto = await resp.json();
-      if(remoto && remoto.data && typeof remoto.data === 'object' && !Array.isArray(remoto.data)) remoto = remoto.data;
-      const nRemotos = Array.isArray(remoto && remoto.pacientes) ? remoto.pacientes.length : null;
-      diagRemoto = nRemotos === null ? 'respuesta sin lista de pacientes' : nRemotos + ' paciente(s) en el servidor';
-      if(remoto && typeof remoto === 'object'){
-        // Google Sheets devuelve teléfonos/cédulas como número (sin el 0) y fechas con hora: se normalizan.
-        (Array.isArray(remoto.pacientes) ? remoto.pacientes : []).forEach(p => {
-          if(!p) return;
-          ['telefono','ci','edad'].forEach(k => { if(p[k] != null) p[k] = String(p[k]); });
-          if(p.telefono && /^9\d{8}$/.test(p.telefono)) p.telefono = '0' + p.telefono;
-          if(p.ci && /^\d{9}$/.test(p.ci)) p.ci = '0' + p.ci;
-          if(typeof p.fechaNacimiento === 'string') p.fechaNacimiento = p.fechaNacimiento.slice(0,10);
-        });
-        ['citas','visitas'].forEach(t => (Array.isArray(remoto[t]) ? remoto[t] : []).forEach(x => {
-          if(x && typeof x.fecha === 'string') x.fecha = x.fecha.slice(0,10);
-        }));
-        // Se UNE con lo local: nunca se borran pacientes que todavía no terminaron de sincronizar.
-        db = {
-          ...defaultDB(), ...db, ...remoto,
-          pacientes: unirPorId(db.pacientes, remoto.pacientes),
-          citas: unirPorId(db.citas, remoto.citas),
-          visitas: unirPorId(db.visitas, remoto.visitas),
-          odontogramas: { ...(db.odontogramas || {}), ...((remoto.odontogramas && typeof remoto.odontogramas === 'object') ? remoto.odontogramas : {}) },
-          config: { ...(db.config || {}), ...((remoto.config && typeof remoto.config === 'object') ? remoto.config : {}) }
-        };
-        saveDB();
-      }
+      const remoto = await resp.json();
+      db = { ...defaultDB(), ...remoto };
+      saveDB();
+      renderPacientes();
     }catch(err){
-      diagRemoto = 'no se pudo leer el servidor';
       console.warn('No se pudo cargar desde el backend, se usan los datos locales.', err);
     }
-    try{ renderPacientes(); }catch(e){ console.warn(e); }
   }
 
   window.addEventListener('online', procesarCola);
@@ -684,8 +629,10 @@
   // ---------- PACIENTES ----------
   let filtroPacientes = '';
   function renderPacientes(){
+    const tbody = document.getElementById('tablaPacientes');
     const vacio = document.getElementById('pacientesVacio');
-    
+    tbody.innerHTML = '';
+
     const termino = normalizar(filtroPacientes);
     const listaFiltrada = termino
       ? db.pacientes.filter(p => normalizar(p.nombre).includes(termino) || normalizar(p.ci).includes(termino) || normalizar(p.telefono).includes(termino))
@@ -699,38 +646,20 @@
       vacio.textContent = 'Aún no hay pacientes registrados.';
     }
 
-    if(!Array.isArray(db.pacientes)) db.pacientes = [];
-    if(!Array.isArray(db.visitas)) db.visitas = [];
-    document.getElementById('diagPacientes').textContent = 'v5 · ' + db.pacientes.length + ' en este dispositivo · ' + diagRemoto;
-    document.getElementById('statPacientes').textContent = db.pacientes.length;
-    document.getElementById('statVisitas').textContent = db.visitas.length;
-    const esc = t => (t || '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const lista = document.getElementById('listaPacientes');
-    lista.innerHTML = '';
     listaFiltrada.forEach(p => {
-      const visitasP = db.visitas.filter(v => v.pacienteId === p.id).sort((x,y) => (y.fecha || '').localeCompare(x.fecha || ''));
-      const total = visitasP.length;
-      const enCiclo = total % VISITAS_POR_BENEFICIO;
-      const completa = total > 0 && enCiclo === 0;
-      const llenos = completa ? VISITAS_POR_BENEFICIO : enCiclo;
-      const ultimo = visitasP[0] && (visitasP[0].tratamiento || 'Visita registrada');
-      const dots = Array.from({length: VISITAS_POR_BENEFICIO}, (_, i) => `<span class="pl-dot${i < llenos ? ' on' : ''}"></span>`).join('');
+      const tr = document.createElement('tr');
       const waText = encodeURIComponent(`Hola ${p.nombre}, aquí está tu enlace para ver tu historial y tarjeta de fidelización: [pendiente de publicar la vista del paciente]`);
-      const row = document.createElement('div');
-      row.className = 'pl-row';
-      row.innerHTML = `
-        <div><div class="pl-name">${esc(p.nombre) || '—'}</div><div class="pl-sub">${esc(p.telefono) || esc(p.ci) || ''}</div></div>
-        <div class="pl-last${ultimo ? '' : ' none'}">${ultimo ? esc(ultimo) : 'Sin servicios'}</div>
-        <div><div class="pl-dots">${dots}</div><div class="pl-count">${llenos}/${VISITAS_POR_BENEFICIO}</div></div>
-        <div>
-          <span class="pl-badge${completa ? ' ok' : ''}">${completa ? 'Beneficio' : 'En progreso'}</span>
-          <button class="pl-link" data-ver="${p.id}">Ver historia</button>
-          ${p.telefono ? `<a class="pl-link" href="https://wa.me/${telefonoWhatsApp(p.telefono)}?text=${waText}" target="_blank">WhatsApp</a>` : ''}
-        </div>`;
-      lista.appendChild(row);
+      tr.innerHTML = `
+        <td>${p.nombre || '—'}</td>
+        <td>${p.edad || '—'}</td>
+        <td>${p.telefono || '—'}</td>
+        <td>${p.telefono ? `<a href="https://wa.me/${telefonoWhatsApp(p.telefono)}?text=${waText}" target="_blank">Abrir WhatsApp</a>` : '—'}</td>
+        <td><button data-ver="${p.id}">Ver historia</button></td>
+      `;
+      tbody.appendChild(tr);
     });
 
-    lista.querySelectorAll('[data-ver]').forEach(btn => {
+    tbody.querySelectorAll('[data-ver]').forEach(btn => {
       btn.addEventListener('click', () => {
         selectedPatientId = btn.dataset.ver;
         document.querySelector('.tab-btn[data-tab="historia"]').click();
@@ -766,24 +695,13 @@
       signosVitales: {},
       examen: {}
     };
-    try{
-      if(!Array.isArray(db.pacientes)) db.pacientes = [];
-      db.pacientes.push(nuevo);
-      selectedPatientId = nuevo.id;
-      saveDB();
-      encolarYSincronizar('guardarPaciente', nuevo);
-    }catch(e){ console.warn(e); }
-    try{
-      ['np-nombre','np-edad','np-ci','np-telefono','np-nacimiento'].forEach(id => document.getElementById(id).value = '');
-      document.getElementById('np-sexo').value = '';
-      filtroPacientes = '';
-      document.getElementById('buscarPaciente').value = '';
-      renderPacientes();
-    }catch(e){ console.warn(e); }
-    // Abre automáticamente la historia clínica del paciente recién registrado
+    db.pacientes.push(nuevo);
+    saveDB();
+    encolarYSincronizar('guardarPaciente', nuevo);
+    ['np-nombre','np-edad','np-ci','np-telefono','np-nacimiento'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('np-sexo').value = '';
     selectedPatientId = nuevo.id;
-    document.querySelector('.tab-btn[data-tab="historia"]').click();
-    window.scrollTo(0, 0);
+    renderPacientes();
   });
 
   // ---------- AGENDA ----------
@@ -943,18 +861,7 @@
       if(code === 'GAP'){ const g = document.createElement('div'); g.className='quadrant-gap'; lower.appendChild(g); return; }
       lower.appendChild(buildToothCard(patientId, code));
     });
-    centrarOdontograma();
   }
-
-  // Deja siempre en el centro de la pantalla 11 | 21 (arriba) y 41 | 31 (abajo).
-  function centrarOdontograma(intento = 0){
-    const cont = document.getElementById('archScroll');
-    const gap = document.querySelector('#archUpper .quadrant-gap');
-    if(!cont || !gap) return;
-    if(cont.clientWidth === 0 && intento < 10){ setTimeout(() => centrarOdontograma(intento + 1), 150); return; }
-    cont.scrollLeft = gap.offsetLeft + gap.offsetWidth / 2 - cont.clientWidth / 2;
-  }
-  window.addEventListener('resize', () => centrarOdontograma());
 
   // ---------- HISTORIA CLINICA ----------
   const inputBuscarHistoria = document.getElementById('buscarPacienteHistoria');
@@ -1071,6 +978,8 @@
     if(!document.getElementById('nv-fecha').value){
       document.getElementById('nv-fecha').value = new Date().toISOString().slice(0,10);
     }
+    document.getElementById('confirmacionGuardado').classList.add('hidden');
+    actualizarResumenPagos(paciente);
     document.getElementById('nv-valorTratamiento').value = paciente.valorTratamiento || '';
     document.getElementById('nv-abono').value = 0;
     actualizarPendienteCalculado();
@@ -1131,6 +1040,27 @@
   let fotosAntesTemp = [];
   let fotosDespuesTemp = [];
 
+  // Reduce el tamaño de la foto antes de enviarla (las fotos de iPad pesan varios MB
+  // y eso puede hacer fallar el envío). 1280px de lado máximo es de sobra para verse bien.
+  function comprimirImagen(dataUrl, maxLado = 1280, calidad = 0.72){
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if(w > maxLado || h > maxLado){
+          if(w > h){ h = Math.round(h * maxLado / w); w = maxLado; }
+          else{ w = Math.round(w * maxLado / h); h = maxLado; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', calidad));
+      };
+      img.onerror = () => resolve(dataUrl); // si algo falla, se usa la original
+      img.src = dataUrl;
+    });
+  }
+
   function configurarInputFoto(inputId, previewId, getArr, setArr){
     document.getElementById(inputId).addEventListener('change', async (e) => {
       const archivos = Array.from(e.target.files || []);
@@ -1141,12 +1071,12 @@
       }
       const seleccionados = archivos.slice(0, espacioDisponible);
       for(const file of seleccionados){
-        const dataUrl = await new Promise((resolve) => {
+        const dataUrlOriginal = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result);
           reader.readAsDataURL(file);
         });
-        actuales.push(dataUrl);
+        actuales.push(await comprimirImagen(dataUrlOriginal));
       }
       setArr(actuales);
       pintarPreviewFotos(previewId, actuales);
@@ -1174,8 +1104,8 @@
     const file = e.target.files[0];
     if(!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
-      depositoTemp = reader.result;
+    reader.onload = async () => {
+      depositoTemp = await comprimirImagen(reader.result);
       const img = document.getElementById('nv-depositoPreview');
       img.src = depositoTemp;
       img.classList.remove('hidden');
@@ -1187,6 +1117,19 @@
   function sumaAbonosPrevios(pacienteId){
     return db.visitas.filter(v => v.pacienteId === pacienteId).reduce((s,v) => s + (Number(v.abono) || 0), 0);
   }
+
+  function actualizarResumenPagos(paciente){
+    const valorTratamiento = Number(paciente.valorTratamiento || 0);
+    const totalAbonado = sumaAbonosPrevios(paciente.id);
+    const pendiente = Math.max(valorTratamiento - totalAbonado, 0);
+    const numVisitas = db.visitas.filter(v => v.pacienteId === paciente.id).length;
+
+    document.getElementById('resumenValorTratamiento').textContent = '$' + valorTratamiento.toFixed(2);
+    document.getElementById('resumenAbonado').textContent = '$' + totalAbonado.toFixed(2);
+    document.getElementById('resumenPendiente').textContent = '$' + pendiente.toFixed(2);
+    document.getElementById('resumenVisitasTexto').textContent =
+      numVisitas === 0 ? 'Aún no hay consultas registradas.' : `${numVisitas} consulta(s) registrada(s).`;
+  }
   function actualizarPendienteCalculado(){
     const valor = Number(document.getElementById('nv-valorTratamiento').value || 0);
     const abono = Number(document.getElementById('nv-abono').value || 0);
@@ -1196,35 +1139,6 @@
   }
   document.getElementById('nv-valorTratamiento').addEventListener('input', actualizarPendienteCalculado);
   document.getElementById('nv-abono').addEventListener('input', actualizarPendienteCalculado);
-
-  // ---------- AVISO "CONSULTA GUARDADA" + BOTÓN WHATSAPP ----------
-  let ultimaVisitaGuardadaId = null;
-  function actualizarAvisoConsulta(){
-    const box = document.getElementById('consultaGuardadaBox');
-    const visita = db.visitas.find(v => v.id === ultimaVisitaGuardadaId);
-    if(!visita || visita.pacienteId !== selectedPatientId){ box.classList.add('hidden'); return; }
-    const paciente = db.pacientes.find(p => p.id === visita.pacienteId);
-    const enDrive = visita.pdfUrl && visita.pdfUrl.startsWith('http');
-    box.classList.remove('hidden');
-    box.classList.toggle('pendiente', !enDrive);
-    document.getElementById('consultaGuardadaMsg').textContent = enDrive
-      ? '✅ Consulta guardada en el Drive'
-      : (backendConfigurado() && navigator.onLine
-          ? '⏳ Consulta guardada. Subiendo al Drive…'
-          : '⚠️ Consulta guardada en el panel. Se subirá al Drive cuando haya conexión.');
-    document.getElementById('btnEnviarConsultaWA').classList.toggle('hidden', !(paciente && paciente.telefono));
-  }
-
-  document.getElementById('btnEnviarConsultaWA').addEventListener('click', () => {
-    const visita = db.visitas.find(v => v.id === ultimaVisitaGuardadaId);
-    const paciente = visita && db.pacientes.find(p => p.id === visita.pacienteId);
-    if(!visita || !paciente || !paciente.telefono) return;
-    const enDrive = visita.pdfUrl && visita.pdfUrl.startsWith('http');
-    const texto = enDrive
-      ? `Hola ${paciente.nombre}, aquí está el comprobante de tu consulta del ${visita.fecha}: ${visita.pdfUrl}`
-      : `Hola ${paciente.nombre}, resumen de tu consulta del ${visita.fecha}: ${visita.tratamiento || 'consulta'}. Abono: $${(visita.abono||0).toFixed(2)}. Pendiente: $${(visita.pendiente||0).toFixed(2)}.`;
-    window.open(`https://wa.me/${telefonoWhatsApp(paciente.telefono)}?text=${encodeURIComponent(texto)}`, '_blank');
-  });
 
   document.getElementById('btnGuardarVisita').addEventListener('click', () => {
     const paciente = db.pacientes.find(p => p.id === selectedPatientId);
@@ -1255,7 +1169,6 @@
     };
     db.visitas.push(nuevaVisita);
     saveDB();
-    ultimaVisitaGuardadaId = nuevaVisita.id;
     encolarYSincronizar('guardarVisita', {
       ...nuevaVisita,
       fotoAntesBase64: [...fotosAntesTemp],
@@ -1290,9 +1203,14 @@
     document.getElementById('nv-deposito').value = '';
     document.getElementById('nv-depositoPreview').classList.add('hidden');
     actualizarPendienteCalculado();
+    actualizarResumenPagos(paciente);
     renderVisitas();
     renderFidelizacion();
-    actualizarAvisoConsulta();
+
+    const link = linkDelPaciente(selectedPatientId);
+    const texto = encodeURIComponent(`Hola ${paciente.nombre}, aquí puedes ver el resumen de tu consulta, tu receta y tus pagos: ${link}`);
+    document.getElementById('linkWhatsAppConsulta').href = `https://wa.me/${telefonoWhatsApp(paciente.telefono)}?text=${texto}`;
+    document.getElementById('confirmacionGuardado').classList.remove('hidden');
   });
 
   function renderVisitas(){
