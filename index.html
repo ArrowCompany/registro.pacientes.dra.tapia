@@ -405,6 +405,7 @@
         <div class="section-title">Pagos</div>
         <div class="field-grid">
           <div class="field"><label>Valor del tratamiento</label><input type="number" id="nv-valorTratamiento" min="0" step="0.01"></div>
+          <div class="field"><label>Cargo adicional (ej. extracción, caries)</label><input type="number" id="nv-cargoExtra" min="0" step="0.01" value="0"></div>
           <div class="field"><label>Abono de esta sesión</label><input type="number" id="nv-abono" min="0" step="0.01" value="0"></div>
           <div class="field">
             <label>Pendiente (automático)</label>
@@ -1172,6 +1173,7 @@
     document.getElementById('confirmacionGuardado').classList.add('hidden');
     actualizarResumenPagos(paciente);
     document.getElementById('nv-valorTratamiento').value = paciente.valorTratamiento || '';
+    document.getElementById('nv-cargoExtra').value = 0;
     document.getElementById('nv-abono').value = 0;
     actualizarPendienteCalculado();
 
@@ -1322,7 +1324,7 @@
       numVisitas === 0 ? 'Aún no hay consultas registradas.' : `${numVisitas} consulta(s) registrada(s).`;
   }
   function actualizarPendienteCalculado(){
-    const valor = Number(document.getElementById('nv-valorTratamiento').value || 0);
+    const valor = Number(document.getElementById('nv-valorTratamiento').value || 0) + Number(document.getElementById('nv-cargoExtra').value || 0);
     const abono = Number(document.getElementById('nv-abono').value || 0);
     const previos = selectedPatientId ? sumaAbonosPrevios(selectedPatientId) : 0;
     const pendiente = Math.max(valor - (previos + abono), 0);
@@ -1330,13 +1332,18 @@
   }
   document.getElementById('nv-valorTratamiento').addEventListener('input', actualizarPendienteCalculado);
   document.getElementById('nv-abono').addEventListener('input', actualizarPendienteCalculado);
+  document.getElementById('nv-cargoExtra').addEventListener('input', actualizarPendienteCalculado);
 
   document.getElementById('btnGuardarVisita').addEventListener('click', () => {
     const paciente = db.pacientes.find(p => p.id === selectedPatientId);
     if(!paciente) return;
 
     const fecha = document.getElementById('nv-fecha').value || new Date().toISOString().slice(0,10);
-    const valorTratamiento = Number(document.getElementById('nv-valorTratamiento').value || 0);
+    // Si el campo quedó vacío en una visita posterior, se conserva el valor ya acordado (ej. 500).
+    // El cargo adicional (ej. muela del juicio $40) se suma al valor acordado (ej. $500 → $540).
+    const cargoExtra = Number(document.getElementById('nv-cargoExtra').value || 0);
+    const valorBase = Number(document.getElementById('nv-valorTratamiento').value || 0) || Number(paciente.valorTratamiento || 0);
+    const valorTratamiento = valorBase + cargoExtra;
     const abono = Number(document.getElementById('nv-abono').value || 0);
     const previos = sumaAbonosPrevios(selectedPatientId);
     const pendiente = Math.max(valorTratamiento - (previos + abono), 0);
@@ -1350,7 +1357,7 @@
       id: uid('visita'), pacienteId: selectedPatientId, fecha,
       hora: new Date().toTimeString().slice(0,5),
       tratamiento: document.getElementById('nv-tratamiento').value,
-      valorTratamiento, abono, pendiente,
+      valorTratamiento, cargoExtra, abono, pendiente,
       notas: document.getElementById('nv-notas').value,
       receta: document.getElementById('nv-receta').value,
       // Mientras se sincroniza, estos campos guardan las imágenes locales (base64) para la vista previa.
@@ -1388,6 +1395,8 @@
     ['nv-tratamiento','nv-notas','nv-receta','nv-proximaFecha'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('nv-fecha').value = new Date().toISOString().slice(0,10);
     document.getElementById('nv-abono').value = 0;
+    document.getElementById('nv-cargoExtra').value = 0;
+    document.getElementById('nv-valorTratamiento').value = valorTratamiento || '';
     fotosAntesTemp = []; fotosDespuesTemp = [];
     pintarPreviewFotos('nv-fotoAntesPreview', []);
     pintarPreviewFotos('nv-fotoDespuesPreview', []);
@@ -1414,7 +1423,9 @@
 
     const paciente = db.pacientes.find(p => p.id === selectedPatientId);
 
+    const ascendentes = [...visitas].sort((a,b) => String(a.fecha).localeCompare(String(b.fecha)));
     visitas.forEach(v => {
+      const cargo = pdfCargoExtra(ascendentes, ascendentes.indexOf(v));
       const fotosAntes = Array.isArray(v.fotoAntesUrl) ? v.fotoAntesUrl : (v.fotoAntesUrl ? [v.fotoAntesUrl] : []);
       const fotosDespues = Array.isArray(v.fotoDespuesUrl) ? v.fotoDespuesUrl : (v.fotoDespuesUrl ? [v.fotoDespuesUrl] : []);
       const tienePdf = v.pdfUrl && v.pdfUrl.startsWith('http');
@@ -1430,7 +1441,7 @@
             <b>${fechaHora(v.fecha, v.hora)}</b> — ${v.tratamiento || 'Sin tratamiento especificado'}
             <div class="visita-seccion"><div class="vs-bar">Notas</div><div class="vs-body">${v.notas || '—'}</div></div>
             ${v.receta ? `<div class="visita-seccion"><div class="vs-bar">Receta</div><div class="vs-body">${v.receta}</div></div>` : ''}
-            <div class="visita-seccion"><div class="vs-bar">Pagos</div><div class="vs-body">Valor tratamiento: $${(v.valorTratamiento||0).toFixed(2)} · Abono: $${(v.abono||0).toFixed(2)} · Pendiente: $${(v.pendiente||0).toFixed(2)}</div></div>
+            <div class="visita-seccion"><div class="vs-bar">Pagos</div><div class="vs-body">Valor tratamiento: $${(v.valorTratamiento||0).toFixed(2)}${cargo > 0 ? ` (incluye cargo adicional +$${cargo.toFixed(2)})` : ''} · Abono: $${(v.abono||0).toFixed(2)} · Pendiente: $${(v.pendiente||0).toFixed(2)}</div></div>
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
             <div style="display:flex;gap:6px;flex-wrap:wrap;max-width:200px;justify-content:flex-end;">
@@ -1598,7 +1609,7 @@
 
   document.getElementById('lightboxOverlay').addEventListener('click', cerrarLightbox);
 
-  // ================= PDF ÚNICO CON TODO (depósito + tratamiento + receta + fotos) =================
+  // ================= PDFs (jsPDF) =================
   function pdfListaUrls(x){
     if(!x) return [];
     if(Array.isArray(x)) return x.filter(Boolean);
@@ -1608,6 +1619,16 @@
     return s ? [s] : [];
   }
 
+  // Cargo adicional de una sesión (ej. extracción $40): viene explícito o se deduce porque el total subió.
+  function pdfCargoExtra(lista, i){
+    const v = lista[i]; const e = Number(v.cargoExtra) || 0;
+    if(e > 0) return e;
+    if(i === 0) return 0;
+    const prev = Number(lista[i-1].valorTratamiento) || 0, cur = Number(v.valorTratamiento) || 0;
+    return prev > 0 && cur > prev ? cur - prev : 0;
+  }
+
+  // Carga una imagen (data: o link de Drive) y la devuelve lista para meter al PDF.
   function pdfCargarImagen(url){
     const intento = (src) => new Promise((resolve) => {
       const img = new Image();
@@ -1635,162 +1656,208 @@
       let r = await intento(url);
       if(r) return r;
       const m = String(url).match(/(?:\/d\/|[?&]id=)([\w-]{20,})/);
-      if(m) r = await intento('https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200');
+      if(m){
+        r = await intento('https://lh3.googleusercontent.com/d/' + m[1] + '=w1200');
+        if(r) return r;
+        r = await intento('https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200');
+      }
       return r;
     })();
   }
 
-  async function generarPdfCompleto({ paciente, visitas, valorTratamiento, receta }){
-    if(!window.jspdf) throw new Error('No cargó la librería de PDF. Revisa tu conexión.');
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  // Herramientas de dibujo compartidas (encabezado oscuro, barras grises, galerías, pie).
+  function pdfHelpers(doc){
     const PW = 210, PH = 297, M = 15, CW = PW - 2 * M;
     let y = 0;
-
-    const fmtFecha = (f) => {
-      const p = String(f || '').slice(0, 10).split('-');
-      return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (f || '—');
-    };
-    const money = (n) => '$' + Number(n || 0).toFixed(2);
-    const limpiar = (s) => String(s == null ? '' : s).replace(/\r/g, '');
-    const ensure = (h) => { if(y + h > PH - 18){ doc.addPage(); y = M; } };
-
-    const barra = (titulo) => {
-      ensure(18); y += 4;
-      doc.setFillColor(240, 240, 240); doc.rect(M, y, CW, 7, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(51, 51, 51);
-      doc.text(String(titulo).toUpperCase(), M + 3, y + 4.9);
-      y += 11;
-    };
-    const fila = (label, valor) => {
-      const lines = doc.splitTextToSize(limpiar(valor) || '—', CW - 48);
-      ensure(Math.max(6, lines.length * 5));
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(130, 130, 130);
-      doc.text(label, M + 3, y);
-      doc.setFontSize(10); doc.setTextColor(30, 30, 30);
-      doc.text(lines, M + 45, y);
-      y += Math.max(6, lines.length * 5);
-    };
-    const parrafo = (txt) => {
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(30, 30, 30);
-      doc.splitTextToSize(limpiar(txt), CW - 6).forEach(l => { ensure(5.5); doc.text(l, M + 3, y); y += 5.2; });
-      y += 1;
-    };
-    const galeria = async (urls, cols) => {
-      const imgs = [];
-      for(const u of urls){ imgs.push({ img: await pdfCargarImagen(u), url: u }); }
-      const gap = 4, cw = (CW - gap * (cols - 1)) / cols, maxH = 70;
-      for(let i = 0; i < imgs.length; i += cols){
-        const fila = imgs.slice(i, i + cols).map(o => {
-          if(!o.img) return { w: cw, h: 10, o };
-          let w = cw, h = cw * o.img.h / o.img.w;
-          if(h > maxH){ h = maxH; w = h * o.img.w / o.img.h; }
-          return { w, h, o };
-        });
-        const alto = Math.max(...fila.map(f => f.h));
-        ensure(alto + 4);
-        fila.forEach((f, j) => {
-          const x = M + j * (cw + gap);
-          if(f.o.img){ doc.addImage(f.o.img.data, 'JPEG', x, y, f.w, f.h); }
-          else{
-            doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-            doc.text('(imagen no disponible)', x, y + 5);
-          }
-        });
-        y += alto + 4;
+    const h = {
+      PW, PH, M, CW,
+      get y(){ return y; }, set y(v){ y = v; },
+      fmtFecha(f){ const p = String(f || '').slice(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (f || '—'); },
+      money(n){ return '$' + Number(n || 0).toFixed(2); },
+      limpiar(s){ return String(s == null ? '' : s).replace(/\r/g, ''); },
+      ensure(alto){ if(y + alto > PH - 18){ doc.addPage(); y = M; } },
+      encabezado(titulo, subtitulo){
+        doc.setFillColor(26, 26, 26); doc.rect(0, 0, PW, 34, 'F');
+        doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+        doc.text(titulo, M, 15);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+        if(subtitulo) doc.text(subtitulo, M, 22);
+        doc.text('María José Tapia - Odontóloga', M, 28);
+        y = 34;
+      },
+      barra(titulo){
+        h.ensure(18); y += 4;
+        doc.setFillColor(240, 240, 240); doc.rect(M, y, CW, 7, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(51, 51, 51);
+        doc.text(String(titulo).toUpperCase(), M + 3, y + 4.9);
+        y += 11;
+      },
+      fila(label, valor){
+        const lines = doc.splitTextToSize(h.limpiar(valor) || '—', CW - 48);
+        h.ensure(Math.max(6, lines.length * 5));
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(130, 130, 130);
+        doc.text(label, M + 3, y);
+        doc.setFontSize(10); doc.setTextColor(30, 30, 30);
+        doc.text(lines, M + 45, y);
+        y += Math.max(6, lines.length * 5);
+      },
+      parrafo(txt){
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(30, 30, 30);
+        doc.splitTextToSize(h.limpiar(txt), CW - 6).forEach(l => { h.ensure(5.5); doc.text(l, M + 3, y); y += 5.2; });
+        y += 1;
+      },
+      async galeria(urls, cols, maxH){
+        cols = cols || 3; maxH = maxH || 70;
+        const imgs = [];
+        for(const u of urls){ imgs.push({ img: await pdfCargarImagen(u), url: u }); }
+        const gap = 4, cw = (CW - gap * (cols - 1)) / cols;
+        for(let i = 0; i < imgs.length; i += cols){
+          const fila = imgs.slice(i, i + cols).map(o => {
+            if(!o.img) return { w: cw, h: 14, o };
+            let w = cw, hh = cw * o.img.h / o.img.w;
+            if(hh > maxH){ hh = maxH; w = hh * o.img.w / o.img.h; }
+            return { w, h: hh, o };
+          });
+          const alto = Math.max(...fila.map(f => f.h));
+          h.ensure(alto + 4);
+          fila.forEach((f, j) => {
+            const x = M + j * (cw + gap);
+            if(f.o.img){ doc.addImage(f.o.img.data, 'JPEG', x, y, f.w, f.h); }
+            else{
+              doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(150, 150, 150);
+              doc.text('(imagen no disponible)', x, y + 5);
+              if(/^https?:/.test(f.o.url)){ doc.setTextColor(19, 128, 138); doc.textWithLink('Abrir imagen', x, y + 10, { url: f.o.url }); }
+            }
+          });
+          y += alto + 4;
+        }
+      },
+      pie(){
+        const n = doc.getNumberOfPages();
+        for(let i = 1; i <= n; i++){
+          doc.setPage(i);
+          doc.setDrawColor(210, 210, 210); doc.line(M, PH - 14, PW - M, PH - 14);
+          doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(150, 150, 150);
+          doc.text('Reporte generado por María José Tapia - Odontóloga', M, PH - 9);
+          doc.text('Página ' + i + ' de ' + n, PW - M, PH - 9, { align: 'right' });
+        }
       }
     };
+    return h;
+  }
 
-    // ---- Encabezado oscuro ----
-    doc.setFillColor(26, 26, 26); doc.rect(0, 0, PW, 34, 'F');
-    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
-    doc.text('María José Tapia - Odontóloga', M, 15);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-    doc.text('Comprobante de tratamiento y pagos', M, 22);
-    doc.text('Generado: ' + new Date().toLocaleDateString('es-EC') + ' ' + new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }), M, 28);
-    y = 34;
+  // PDF con SOLO fotos: se usa para "Comprobante: Ver pdf" (depósito) y "Fotos antes y después: Ver pdf".
+  async function generarPdfFotos({ titulo, subtitulo, secciones }){
+    if(!window.jspdf) throw new Error('No cargó la librería de PDF. Revisa tu conexión.');
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    const h = pdfHelpers(doc);
+    h.encabezado(titulo, subtitulo);
+    for(const s of secciones){
+      if(!s.urls || !s.urls.length) continue;
+      h.ensure(90); // la barra gris siempre queda junto a su primera foto
+      h.barra(s.titulo);
+      await h.galeria(s.urls, s.cols || 2, s.maxH || 110);
+    }
+    h.pie();
+    return doc;
+  }
 
+  // Debe llamarse directo desde un clic: abre la pestaña de inmediato para que el navegador no la bloquee.
+  async function abrirPdfFotos(args, boton){
+    const textoOriginal = boton ? boton.textContent : '';
+    if(boton){ boton.disabled = true; boton.textContent = 'Generando…'; }
+    const w = window.open('', '_blank');
+    if(w){ try{ w.document.write('<p style="font-family:sans-serif;padding:24px">Generando PDF…</p>'); }catch(e){} }
+    try{
+      const doc = await generarPdfFotos(args);
+      if(w){ w.location.href = doc.output('bloburl'); }
+      else{ doc.save('Fotos.pdf'); }
+    }catch(err){
+      if(w) w.close();
+      alert('No se pudo generar el PDF: ' + (err && err.message ? err.message : err));
+    }finally{
+      if(boton){ boton.disabled = false; boton.textContent = textoOriginal; }
+    }
+  }
+
+  // PDF completo (lo usa el panel de la doctora).
+  async function generarPdfCompleto({ paciente, visitas, valorTratamiento, receta }){
+    if(!window.jspdf) throw new Error('No cargó la librería de PDF. Revisa tu conexión.');
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    const h = pdfHelpers(doc);
+    const { M, CW, fmtFecha, money, limpiar } = h;
+
+    h.encabezado('Comprobante de tratamiento y pagos', 'Generado: ' + new Date().toLocaleDateString('es-EC'));
     const lista = [...(visitas || [])].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
 
-    // ---- Datos del paciente ----
-    barra('Información del paciente');
-    fila('Nombre:', paciente && paciente.nombre);
-    if(paciente && paciente.telefono) fila('Teléfono:', paciente.telefono);
+    h.barra('Información del paciente');
+    h.fila('Nombre:', paciente && paciente.nombre);
+    if(paciente && paciente.telefono) h.fila('Teléfono:', paciente.telefono);
     const ultimo = lista[lista.length - 1];
-    if(ultimo && ultimo.tratamiento) fila('Tratamiento:', ultimo.tratamiento);
+    if(ultimo && ultimo.tratamiento) h.fila('Tratamiento:', ultimo.tratamiento);
 
-    // ---- Receta ----
     const meds = receta ? limpiar(receta).split('\n').map(l => l.trim().replace(/^[*•\-–]\s*/, '')).filter(Boolean) : [];
     if(meds.length){
-      barra('Receta');
+      h.barra('Receta');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(185, 106, 124);
-      ensure(7); doc.text('Rp.', M + 3, y); y += 6;
-      meds.forEach(m => parrafo('•  ' + m));
+      h.ensure(7); doc.text('Rp.', M + 3, h.y); h.y += 6;
+      meds.forEach(m => h.parrafo('•  ' + m));
     }
 
-    // ---- Comprobante de pago ----
     const totalAbonado = lista.reduce((s, v) => s + (Number(v.abono) || 0), 0);
     const valor = Number(valorTratamiento) || Number((ultimo && ultimo.valorTratamiento) || 0);
     const pendiente = Math.max(valor - totalAbonado, 0);
-    barra('Comprobante de pago');
-    ensure(24);
+    h.barra('Comprobante de pago');
+    h.ensure(24);
     const bw = (CW - 8) / 3;
     [['Valor del tratamiento', valor, false], ['Abonado', totalAbonado, false], ['Pendiente', pendiente, true]].forEach((b, i) => {
       const x = M + i * (bw + 4);
-      doc.setFillColor(247, 236, 222); doc.roundedRect(x, y, bw, 20, 2, 2, 'F');
+      doc.setFillColor(247, 236, 222); doc.roundedRect(x, h.y, bw, 20, 2, 2, 'F');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
       if(b[2]) doc.setTextColor(185, 106, 124); else doc.setTextColor(40, 40, 40);
-      doc.text(money(b[1]), x + bw / 2, y + 9, { align: 'center' });
+      doc.text(money(b[1]), x + bw / 2, h.y + 9, { align: 'center' });
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(120, 120, 120);
-      doc.text(b[0], x + bw / 2, y + 15, { align: 'center' });
+      doc.text(b[0], x + bw / 2, h.y + 15, { align: 'center' });
     });
-    y += 26;
+    h.y += 26;
 
     if(lista.length){
-      ensure(14);
+      h.ensure(14);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(130, 130, 130);
-      doc.text('FECHA', M + 3, y); doc.text('TRATAMIENTO', M + 30, y);
-      doc.text('ABONO', M + 120, y, { align: 'right' }); doc.text('SALDO', M + CW - 3, y, { align: 'right' });
-      y += 2; doc.setDrawColor(220, 220, 220); doc.line(M, y, M + CW, y); y += 5;
+      doc.text('FECHA', M + 3, h.y); doc.text('TRATAMIENTO', M + 30, h.y);
+      doc.text('ABONO', M + 120, h.y, { align: 'right' }); doc.text('SALDO', M + CW - 3, h.y, { align: 'right' });
+      h.y += 2; doc.setDrawColor(220, 220, 220); doc.line(M, h.y, M + CW, h.y); h.y += 5;
       let acumulado = 0;
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(30, 30, 30);
       lista.forEach(v => {
         acumulado += Number(v.abono) || 0;
         const saldo = Math.max((Number(v.valorTratamiento) || valor) - acumulado, 0);
         const trat = doc.splitTextToSize(limpiar(v.tratamiento) || '—', 80);
-        ensure(trat.length * 5 + 3);
-        doc.text(fmtFecha(v.fecha), M + 3, y);
-        doc.text(trat, M + 30, y);
-        doc.text(money(v.abono), M + 120, y, { align: 'right' });
-        doc.text(money(saldo), M + CW - 3, y, { align: 'right' });
-        y += trat.length * 5; doc.setDrawColor(235, 235, 235); doc.line(M, y - 2, M + CW, y - 2); y += 2;
+        h.ensure(trat.length * 5 + 3);
+        doc.text(fmtFecha(v.fecha), M + 3, h.y);
+        doc.text(trat, M + 30, h.y);
+        doc.text(money(v.abono), M + 120, h.y, { align: 'right' });
+        doc.text(money(saldo), M + CW - 3, h.y, { align: 'right' });
+        h.y += trat.length * 5; doc.setDrawColor(235, 235, 235); doc.line(M, h.y - 2, M + CW, h.y - 2); h.y += 2;
       });
     }
 
-    // ---- Una sección por sesión: trabajo realizado, depósito, antes y después ----
-    for(const v of lista){
-      barra('Sesión del ' + fmtFecha(v.fecha) + ' - Trabajo realizado');
-      fila('Tratamiento:', v.tratamiento);
-      if(v.notas) fila('Notas:', v.notas);
-      fila('Abono de la sesión:', money(v.abono));
-
+    for(let i = 0; i < lista.length; i++){
+      const v = lista[i];
+      h.barra('Sesión del ' + fmtFecha(v.fecha) + ' - Trabajo realizado');
+      h.fila('Tratamiento:', v.tratamiento);
+      if(v.notas) h.fila('Notas:', v.notas);
+      const extra = pdfCargoExtra(lista, i);
+      if(extra > 0) h.fila('Cargo adicional:', '+' + money(extra));
+      h.fila('Abono de la sesión:', money(v.abono));
       const dep = pdfListaUrls(v.depositoFotoUrl);
-      if(dep.length){ barra('Comprobante de depósito'); await galeria(dep, 2); }
+      if(dep.length){ h.barra('Comprobante de depósito'); await h.galeria(dep, 2); }
       const antes = pdfListaUrls(v.fotoAntesUrl);
-      if(antes.length){ barra('Fotos antes'); await galeria(antes, 3); }
+      if(antes.length){ h.barra('Fotos antes'); await h.galeria(antes, 3); }
       const despues = pdfListaUrls(v.fotoDespuesUrl);
-      if(despues.length){ barra('Fotos después'); await galeria(despues, 3); }
+      if(despues.length){ h.barra('Fotos después'); await h.galeria(despues, 3); }
     }
-
-    // ---- Pie de página ----
-    const n = doc.getNumberOfPages();
-    for(let i = 1; i <= n; i++){
-      doc.setPage(i);
-      doc.setDrawColor(210, 210, 210); doc.line(M, PH - 14, PW - M, PH - 14);
-      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(150, 150, 150);
-      doc.text('Reporte generado por María José Tapia - Odontóloga', M, PH - 9);
-      doc.text('Página ' + i + ' de ' + n, PW - M, PH - 9, { align: 'right' });
-    }
+    h.pie();
     return doc;
   }
 
@@ -1807,6 +1874,7 @@
       if(boton){ boton.disabled = false; boton.textContent = textoOriginal; }
     }
   }
+
 
   function pdfDePaciente(pacienteId, boton){
     const paciente = db.pacientes.find(p => p.id === pacienteId);
