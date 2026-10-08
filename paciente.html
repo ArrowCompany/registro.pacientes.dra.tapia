@@ -108,6 +108,13 @@
   // Debe ser la misma URL de despliegue que usa el panel del consultorio.
   const CONFIG = { APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbznpX-f_N7MvaLxodfZDJthEZ__hkfXVM-_E49O3xcM7c8zGaeB_emfdx-aY-_TxtE8/exec' };
 
+  // Convierte cualquier valor en número (acepta "$1,200.50", "400", vacío o texto raro → 0).
+  function num(x){
+    if(typeof x === 'number') return isFinite(x) ? x : 0;
+    const n = parseFloat(String(x == null ? '' : x).replace(/[^0-9.\-]/g, ''));
+    return isFinite(n) ? n : 0;
+  }
+
   function formatearFechaBonita(fechaISO){
     const partes = String(fechaISO || '').slice(0,10).split('-');
     if(partes.length !== 3) return fechaISO || '—';
@@ -259,6 +266,7 @@
           });
           y += alto + 4;
         }
+        return imgs.filter(o => o.img).length;
       },
       pie(){
         const n = doc.getNumberOfPages();
@@ -280,12 +288,14 @@
     const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
     const h = pdfHelpers(doc);
     h.encabezado(titulo, subtitulo);
+    let cargadas = 0;
     for(const s of secciones){
       if(!s.urls || !s.urls.length) continue;
       h.ensure(90); // la barra gris siempre queda junto a su primera foto
       h.barra(s.titulo);
-      await h.galeria(s.urls, s.cols || 2, s.maxH || 110);
+      cargadas += await h.galeria(s.urls, s.cols || 2, s.maxH || 110);
     }
+    if(cargadas === 0) throw new Error('No se pudo cargar la foto. Revisa tu conexión e intenta de nuevo en unos segundos.');
     h.pie();
     return doc;
   }
@@ -415,27 +425,29 @@
     const visitasRecientes = [...visitas].reverse();
 
     // Receta: la última registrada (si el servidor no la manda, se toma de la última visita con receta)
-    let r = data.ultimaReceta;
-    if(!r || !r.receta){
-      const v = visitasRecientes.find(x => x.receta && String(x.receta).trim());
-      if(v) r = { receta: v.receta, fecha: v.fecha, tratamiento: v.tratamiento };
-    }
+    // Se toma SIEMPRE de la visita más reciente que tenga medicamentos escritos (no del campo Notas).
+    let r = null;
+    const vReceta = visitasRecientes.find(x => x.receta && String(x.receta).trim());
+    if(vReceta) r = { receta: vReceta.receta, fecha: vReceta.fecha, tratamiento: vReceta.tratamiento };
+    else if(data.ultimaReceta && data.ultimaReceta.receta) r = data.ultimaReceta;
     const medicamentos = r && r.receta ? String(r.receta).split('\n').map(l => l.trim().replace(/^[*•\-–]\s*/, '')).filter(Boolean) : [];
 
     // Resumen de pagos calculado aquí mismo, con los abonos reales de cada sesión
-    const ultima = visitasRecientes[0];
-    // El total vigente es el de la visita más reciente (ya incluye cargos adicionales como una extracción).
-    const valor = Number((ultima && ultima.valorTratamiento) || (data.paciente && data.paciente.valorTratamiento) || (data.resumen && data.resumen.valorTratamiento) || 0);
+    // El total vigente es el de la visita más reciente que tenga valor (ya incluye cargos adicionales como una extracción).
+    const ultimaConValor = visitasRecientes.find(x => num(x.valorTratamiento) > 0);
+    const valor = ultimaConValor
+      ? num(ultimaConValor.valorTratamiento)
+      : (num(data.paciente && data.paciente.valorTratamiento) || num(data.resumen && data.resumen.valorTratamiento));
     const cargos = visitas.map((v, i) => pdfCargoExtra(visitas, i));
     const totalExtras = cargos.reduce((s, c) => s + c, 0);
-    const totalAbonado = visitas.length ? visitas.reduce((s,v) => s + (Number(v.abono) || 0), 0) : Number((data.resumen && data.resumen.totalAbonado) || 0);
+    const totalAbonado = visitas.length ? visitas.reduce((s,v) => s + num(v.abono), 0) : num(data.resumen && data.resumen.totalAbonado);
     const pendiente = Math.max(valor - totalAbonado, 0);
 
     let acumulado = 0;
     const filasPagos = visitas.map((v, i) => {
-      acumulado += Number(v.abono) || 0;
-      const saldo = Math.max((Number(v.valorTratamiento) || valor) - acumulado, 0);
-      const tieneDep = pdfListaUrls(v.depositoFotoUrl).length > 0;
+      acumulado += num(v.abono);
+      const saldo = Math.max((num(v.valorTratamiento) || valor) - acumulado, 0);
+      const tieneDep = pdfListaUrls(v.depositoFotoUrl).length > 0 || /^https?:/.test(String(v.depositoPdfUrl || ''));
       return `<tr><td>${formatearFechaBonita(v.fecha)}</td><td>${esc(v.tratamiento) || '—'}${cargos[i] > 0 ? `<div class="hint" style="margin:2px 0 0;font-size:11px;">Cargo adicional +${money(cargos[i])}</div>` : ''}</td><td>${money(v.abono)}</td><td>${money(saldo)}</td>
         <td>${tieneDep ? `<button class="btn-teal" data-dep="${i}">Ver pdf</button>` : '—'}</td></tr>`;
     }).join('');
@@ -534,6 +546,8 @@
     }
     app.querySelectorAll('[data-dep]').forEach(btn => btn.addEventListener('click', () => {
       const v = visitas[Number(btn.dataset.dep)];
+      // Si el servidor ya creó el PDF del depósito en Drive, se abre directo (funciona en cualquier celular).
+      if(/^https?:/.test(String(v.depositoPdfUrl || ''))){ window.open(v.depositoPdfUrl, '_blank'); return; }
       abrirPdfFotos({
         titulo: 'Comprobante de depósito',
         subtitulo: data.paciente.nombre + ' · ' + formatearFechaBonita(v.fecha),

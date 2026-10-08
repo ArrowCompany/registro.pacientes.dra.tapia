@@ -578,6 +578,7 @@
             if(data.data.fotoAntesUrl) visita.fotoAntesUrl = data.data.fotoAntesUrl;
             if(data.data.fotoDespuesUrl) visita.fotoDespuesUrl = data.data.fotoDespuesUrl;
             if(data.data.depositoFotoUrl) visita.depositoFotoUrl = data.data.depositoFotoUrl;
+            if(data.data.depositoPdfUrl) visita.depositoPdfUrl = data.data.depositoPdfUrl;
             if(data.data.pdfUrl) visita.pdfUrl = data.data.pdfUrl;
             saveDB();
             if(document.getElementById('view-historia').classList.contains('active')) renderVisitas();
@@ -684,6 +685,7 @@
       fusionar('citas', 'guardarCita');
       normalizarFechas(remotoDB);
       db = remotoDB;
+      db.pacientes.forEach(p => { const vv = valorVigente(p); if(vv > 0) p.valorTratamiento = vv; });
       saveDB();
       renderizarPestanaActiva();
       return true;
@@ -1172,7 +1174,7 @@
     }
     document.getElementById('confirmacionGuardado').classList.add('hidden');
     actualizarResumenPagos(paciente);
-    document.getElementById('nv-valorTratamiento').value = paciente.valorTratamiento || '';
+    document.getElementById('nv-valorTratamiento').value = valorVigente(paciente) || '';
     document.getElementById('nv-cargoExtra').value = 0;
     document.getElementById('nv-abono').value = 0;
     actualizarPendienteCalculado();
@@ -1307,12 +1309,27 @@
   });
 
   // ---------- CÁLCULO AUTOMÁTICO: valor del tratamiento − todos los abonos ----------
+  function escHtml(t){
+    return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  }
+
+  // El valor vigente es el de la visita más reciente que tenga valor (ya incluye cargos adicionales).
+  // Si no hay ninguna, se usa el de la ficha del paciente. Así el resumen no depende de un solo dato que se pueda perder.
+  function valorVigente(paciente){
+    const vs = db.visitas.filter(v => v.pacienteId === paciente.id).sort((a,b) => String(a.fecha).localeCompare(String(b.fecha)));
+    for(let i = vs.length - 1; i >= 0; i--){
+      const n = Number(vs[i].valorTratamiento) || 0;
+      if(n > 0) return n;
+    }
+    return Number(paciente.valorTratamiento) || 0;
+  }
+
   function sumaAbonosPrevios(pacienteId){
     return db.visitas.filter(v => v.pacienteId === pacienteId).reduce((s,v) => s + (Number(v.abono) || 0), 0);
   }
 
   function actualizarResumenPagos(paciente){
-    const valorTratamiento = Number(paciente.valorTratamiento || 0);
+    const valorTratamiento = valorVigente(paciente);
     const totalAbonado = sumaAbonosPrevios(paciente.id);
     const pendiente = Math.max(valorTratamiento - totalAbonado, 0);
     const numVisitas = db.visitas.filter(v => v.pacienteId === paciente.id).length;
@@ -1342,11 +1359,21 @@
     // Si el campo quedó vacío en una visita posterior, se conserva el valor ya acordado (ej. 500).
     // El cargo adicional (ej. muela del juicio $40) se suma al valor acordado (ej. $500 → $540).
     const cargoExtra = Number(document.getElementById('nv-cargoExtra').value || 0);
-    const valorBase = Number(document.getElementById('nv-valorTratamiento').value || 0) || Number(paciente.valorTratamiento || 0);
+    const valorBase = Number(document.getElementById('nv-valorTratamiento').value || 0) || valorVigente(paciente);
     const valorTratamiento = valorBase + cargoExtra;
     const abono = Number(document.getElementById('nv-abono').value || 0);
     const previos = sumaAbonosPrevios(selectedPatientId);
     const pendiente = Math.max(valorTratamiento - (previos + abono), 0);
+
+    // Aviso antes de guardar un tratamiento sin valor (el paciente vería $0.00 en su comprobante).
+    if(valorTratamiento <= 0){
+      const notasTxt = document.getElementById('nv-notas').value.trim();
+      const soloNumero = /^\$?\s*\d+([.,]\d+)?$/.test(notasTxt);
+      const aviso = 'No escribiste el valor del tratamiento: el comprobante del paciente mostrará $0.00.' +
+        (soloNumero ? '\n\nEn Notas escribiste solo un número (' + notasTxt + '). Si era el valor, cancela y ponlo en "Valor del tratamiento".' : '') +
+        '\n\n¿Guardar la consulta así de todas formas?';
+      if(!confirm(aviso)) return;
+    }
 
     // El valor del tratamiento queda guardado en la ficha del paciente para la próxima sesión.
     paciente.valorTratamiento = valorTratamiento;
@@ -1429,6 +1456,7 @@
       const fotosAntes = Array.isArray(v.fotoAntesUrl) ? v.fotoAntesUrl : (v.fotoAntesUrl ? [v.fotoAntesUrl] : []);
       const fotosDespues = Array.isArray(v.fotoDespuesUrl) ? v.fotoDespuesUrl : (v.fotoDespuesUrl ? [v.fotoDespuesUrl] : []);
       const tienePdf = v.pdfUrl && v.pdfUrl.startsWith('http');
+      const tieneDepPdf = v.depositoPdfUrl && String(v.depositoPdfUrl).startsWith('http');
       const waTexto = encodeURIComponent(`Hola ${paciente ? paciente.nombre : ''}, aquí está el comprobante de tu consulta del ${fechaHora(v.fecha, v.hora)}:\n\n${v.pdfUrl || ''}`);
       const waHref = paciente && paciente.telefono ? `https://wa.me/${telefonoWhatsApp(paciente.telefono)}?text=${waTexto}` : '';
 
@@ -1440,7 +1468,7 @@
           <div>
             <b>${fechaHora(v.fecha, v.hora)}</b> — ${v.tratamiento || 'Sin tratamiento especificado'}
             <div class="visita-seccion"><div class="vs-bar">Notas</div><div class="vs-body">${v.notas || '—'}</div></div>
-            ${v.receta ? `<div class="visita-seccion"><div class="vs-bar">Receta</div><div class="vs-body">${v.receta}</div></div>` : ''}
+            ${v.receta ? `<div class="visita-seccion"><div class="vs-bar">Receta</div><div class="vs-body" style="white-space:pre-line;">${escHtml(v.receta)}</div></div>` : ''}
             <div class="visita-seccion"><div class="vs-bar">Pagos</div><div class="vs-body">Valor tratamiento: $${(v.valorTratamiento||0).toFixed(2)}${cargo > 0 ? ` (incluye cargo adicional +$${cargo.toFixed(2)})` : ''} · Abono: $${(v.abono||0).toFixed(2)} · Pendiente: $${(v.pendiente||0).toFixed(2)}</div></div>
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
@@ -1450,6 +1478,7 @@
               ${v.depositoFotoUrl ? `<img src="${v.depositoFotoUrl}" class="photo-preview photo-click" title="Comprobante de depósito — toca para ampliar" style="max-width:64px;border-color:var(--teal);" data-ampliar="${v.depositoFotoUrl}">` : ''}
             </div>
             ${tienePdf ? `<a href="${v.pdfUrl}" target="_blank">Ver PDF guardado</a>` : ''}
+            ${tieneDepPdf ? `<a href="${v.depositoPdfUrl}" target="_blank">Ver PDF del depósito</a>` : ''}
             ${tienePdf && waHref ? `<a href="${waHref}" target="_blank"><button>📲 Enviar por WhatsApp</button></a>` : ''}
             <button data-pdf="${v.id}">Imprimir / PDF local</button>
           </div>
