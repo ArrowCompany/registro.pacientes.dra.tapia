@@ -6,6 +6,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <meta name="apple-mobile-web-app-title" content="Dra. Tapia">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <title>Mi receta y comprobante — María José Tapia Odontóloga</title>
 <style>
   :root{
@@ -68,6 +69,31 @@
   .dot{ width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; background:var(--cream); color:var(--ink-soft); border:1px solid var(--line); }
   .dot.filled{ background:var(--pink); color:#fff; border-color:var(--pink); }
 
+
+  /* Separaciones divisorias (mismo estilo del reporte PDF) */
+  .doc-head{ background:#1a1a1a; color:#fff; border-radius:12px 12px 0 0; padding:16px 18px; display:flex; align-items:center; gap:12px; }
+  .doc-head img{ width:42px; height:42px; object-fit:contain; border-radius:8px; background:#fff; }
+  .doc-head h2{ margin:0; font-size:17px; } .doc-head p{ margin:2px 0 0; font-size:12px; opacity:.8; }
+  .sec{ margin-top:16px; }
+  .sec-bar{ background:var(--cream); color:var(--ink); font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:.3px; padding:7px 12px; border-radius:6px; }
+  .sec-body{ padding:10px 6px 0; font-size:14px; }
+  .fila{ display:flex; gap:10px; margin:6px 0; font-size:14px; }
+  .fila .lbl{ width:130px; color:var(--ink-soft); flex-shrink:0; }
+  .galeria{ display:flex; flex-wrap:wrap; gap:8px; }
+  .galeria img{ width:calc(33.3% - 6px); aspect-ratio:1; object-fit:cover; border-radius:8px; border:1px solid var(--line); cursor:pointer; }
+  .galeria.dep img{ width:calc(50% - 4px); aspect-ratio:auto; max-height:420px; object-fit:contain; background:var(--cream); }
+  .btn{ display:inline-block; border:0; background:var(--pink); color:#fff; font-weight:700; font-size:14px; padding:12px 18px; border-radius:10px; cursor:pointer; }
+  .btn.sec2{ background:var(--surface); color:var(--pink-dark); border:1px solid var(--pink); }
+  .acciones{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .lb{ position:fixed; inset:0; background:rgba(0,0,0,.85); display:none; align-items:center; justify-content:center; z-index:50; }
+  .lb.show{ display:flex; } .lb img{ max-width:96vw; max-height:92vh; border-radius:8px; }
+  @media print{
+    body{ background:#fff !important; color:#000 !important; }
+    body.print-receta .top-bar, body.print-receta .tabs, body.print-receta .no-print, body.print-receta #panelComprobante{ display:none !important; }
+    body.print-receta #panelReceta{ display:block !important; }
+    body.print-receta .receta-doc, body.print-receta .doc-head, body.print-receta .sec-bar{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .receta-doc{ border-color:#000 !important; background:#fff !important; color:#000 !important; }
+  }
   .estado-carga{ text-align:center; padding:60px 20px; color:var(--ink-soft); }
 </style>
 </head>
@@ -109,30 +135,274 @@
     }
   }
 
+  // ================= PDF ÚNICO CON TODO (depósito + tratamiento + receta + fotos) =================
+  function pdfListaUrls(x){
+    if(!x) return [];
+    if(Array.isArray(x)) return x.filter(Boolean);
+    const s = String(x).trim();
+    if(s.startsWith('[')){ try{ return JSON.parse(s).filter(Boolean); }catch(e){} }
+    if(s.includes(',http')) return s.split(',').map(t => t.trim()).filter(Boolean);
+    return s ? [s] : [];
+  }
+
+  function pdfCargarImagen(url){
+    const intento = (src) => new Promise((resolve) => {
+      const img = new Image();
+      if(!src.startsWith('data:')) img.crossOrigin = 'anonymous';
+      const t = setTimeout(() => resolve(null), 20000);
+      img.onload = () => {
+        clearTimeout(t);
+        try{
+          const w0 = img.naturalWidth, h0 = img.naturalHeight;
+          if(!w0 || !h0) return resolve(null);
+          const k = Math.min(1, 1200 / Math.max(w0, h0));
+          const c = document.createElement('canvas');
+          c.width = Math.round(w0 * k); c.height = Math.round(h0 * k);
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          resolve({ data: c.toDataURL('image/jpeg', 0.8), w: c.width, h: c.height });
+        }catch(e){ resolve(null); }
+      };
+      img.onerror = () => { clearTimeout(t); resolve(null); };
+      img.src = src;
+    });
+    return (async () => {
+      if(!url) return null;
+      let r = await intento(url);
+      if(r) return r;
+      const m = String(url).match(/(?:\/d\/|[?&]id=)([\w-]{20,})/);
+      if(m) r = await intento('https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1200');
+      return r;
+    })();
+  }
+
+  async function generarPdfCompleto({ paciente, visitas, valorTratamiento, receta }){
+    if(!window.jspdf) throw new Error('No cargó la librería de PDF. Revisa tu conexión.');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const PW = 210, PH = 297, M = 15, CW = PW - 2 * M;
+    let y = 0;
+
+    const fmtFecha = (f) => {
+      const p = String(f || '').slice(0, 10).split('-');
+      return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (f || '—');
+    };
+    const money = (n) => '$' + Number(n || 0).toFixed(2);
+    const limpiar = (s) => String(s == null ? '' : s).replace(/\r/g, '');
+    const ensure = (h) => { if(y + h > PH - 18){ doc.addPage(); y = M; } };
+
+    const barra = (titulo) => {
+      ensure(18); y += 4;
+      doc.setFillColor(240, 240, 240); doc.rect(M, y, CW, 7, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(51, 51, 51);
+      doc.text(String(titulo).toUpperCase(), M + 3, y + 4.9);
+      y += 11;
+    };
+    const fila = (label, valor) => {
+      const lines = doc.splitTextToSize(limpiar(valor) || '—', CW - 48);
+      ensure(Math.max(6, lines.length * 5));
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(130, 130, 130);
+      doc.text(label, M + 3, y);
+      doc.setFontSize(10); doc.setTextColor(30, 30, 30);
+      doc.text(lines, M + 45, y);
+      y += Math.max(6, lines.length * 5);
+    };
+    const parrafo = (txt) => {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(30, 30, 30);
+      doc.splitTextToSize(limpiar(txt), CW - 6).forEach(l => { ensure(5.5); doc.text(l, M + 3, y); y += 5.2; });
+      y += 1;
+    };
+    const galeria = async (urls, cols) => {
+      const imgs = [];
+      for(const u of urls){ imgs.push({ img: await pdfCargarImagen(u), url: u }); }
+      const gap = 4, cw = (CW - gap * (cols - 1)) / cols, maxH = 70;
+      for(let i = 0; i < imgs.length; i += cols){
+        const fila = imgs.slice(i, i + cols).map(o => {
+          if(!o.img) return { w: cw, h: 10, o };
+          let w = cw, h = cw * o.img.h / o.img.w;
+          if(h > maxH){ h = maxH; w = h * o.img.w / o.img.h; }
+          return { w, h, o };
+        });
+        const alto = Math.max(...fila.map(f => f.h));
+        ensure(alto + 4);
+        fila.forEach((f, j) => {
+          const x = M + j * (cw + gap);
+          if(f.o.img){ doc.addImage(f.o.img.data, 'JPEG', x, y, f.w, f.h); }
+          else{
+            doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(150, 150, 150);
+            doc.text('(imagen no disponible)', x, y + 5);
+          }
+        });
+        y += alto + 4;
+      }
+    };
+
+    // ---- Encabezado oscuro ----
+    doc.setFillColor(26, 26, 26); doc.rect(0, 0, PW, 34, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+    doc.text('María José Tapia - Odontóloga', M, 15);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    doc.text('Comprobante de tratamiento y pagos', M, 22);
+    doc.text('Generado: ' + new Date().toLocaleDateString('es-EC') + ' ' + new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }), M, 28);
+    y = 34;
+
+    const lista = [...(visitas || [])].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+
+    // ---- Datos del paciente ----
+    barra('Información del paciente');
+    fila('Nombre:', paciente && paciente.nombre);
+    if(paciente && paciente.telefono) fila('Teléfono:', paciente.telefono);
+    const ultimo = lista[lista.length - 1];
+    if(ultimo && ultimo.tratamiento) fila('Tratamiento:', ultimo.tratamiento);
+
+    // ---- Receta ----
+    const meds = receta ? limpiar(receta).split('\n').map(l => l.trim().replace(/^[*•\-–]\s*/, '')).filter(Boolean) : [];
+    if(meds.length){
+      barra('Receta');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(185, 106, 124);
+      ensure(7); doc.text('Rp.', M + 3, y); y += 6;
+      meds.forEach(m => parrafo('•  ' + m));
+    }
+
+    // ---- Comprobante de pago ----
+    const totalAbonado = lista.reduce((s, v) => s + (Number(v.abono) || 0), 0);
+    const valor = Number(valorTratamiento) || Number((ultimo && ultimo.valorTratamiento) || 0);
+    const pendiente = Math.max(valor - totalAbonado, 0);
+    barra('Comprobante de pago');
+    ensure(24);
+    const bw = (CW - 8) / 3;
+    [['Valor del tratamiento', valor, false], ['Abonado', totalAbonado, false], ['Pendiente', pendiente, true]].forEach((b, i) => {
+      const x = M + i * (bw + 4);
+      doc.setFillColor(247, 236, 222); doc.roundedRect(x, y, bw, 20, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
+      if(b[2]) doc.setTextColor(185, 106, 124); else doc.setTextColor(40, 40, 40);
+      doc.text(money(b[1]), x + bw / 2, y + 9, { align: 'center' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(120, 120, 120);
+      doc.text(b[0], x + bw / 2, y + 15, { align: 'center' });
+    });
+    y += 26;
+
+    if(lista.length){
+      ensure(14);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(130, 130, 130);
+      doc.text('FECHA', M + 3, y); doc.text('TRATAMIENTO', M + 30, y);
+      doc.text('ABONO', M + 120, y, { align: 'right' }); doc.text('SALDO', M + CW - 3, y, { align: 'right' });
+      y += 2; doc.setDrawColor(220, 220, 220); doc.line(M, y, M + CW, y); y += 5;
+      let acumulado = 0;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(30, 30, 30);
+      lista.forEach(v => {
+        acumulado += Number(v.abono) || 0;
+        const saldo = Math.max((Number(v.valorTratamiento) || valor) - acumulado, 0);
+        const trat = doc.splitTextToSize(limpiar(v.tratamiento) || '—', 80);
+        ensure(trat.length * 5 + 3);
+        doc.text(fmtFecha(v.fecha), M + 3, y);
+        doc.text(trat, M + 30, y);
+        doc.text(money(v.abono), M + 120, y, { align: 'right' });
+        doc.text(money(saldo), M + CW - 3, y, { align: 'right' });
+        y += trat.length * 5; doc.setDrawColor(235, 235, 235); doc.line(M, y - 2, M + CW, y - 2); y += 2;
+      });
+    }
+
+    // ---- Una sección por sesión: trabajo realizado, depósito, antes y después ----
+    for(const v of lista){
+      barra('Sesión del ' + fmtFecha(v.fecha) + ' - Trabajo realizado');
+      fila('Tratamiento:', v.tratamiento);
+      if(v.notas) fila('Notas:', v.notas);
+      fila('Abono de la sesión:', money(v.abono));
+
+      const dep = pdfListaUrls(v.depositoFotoUrl);
+      if(dep.length){ barra('Comprobante de depósito'); await galeria(dep, 2); }
+      const antes = pdfListaUrls(v.fotoAntesUrl);
+      if(antes.length){ barra('Fotos antes'); await galeria(antes, 3); }
+      const despues = pdfListaUrls(v.fotoDespuesUrl);
+      if(despues.length){ barra('Fotos después'); await galeria(despues, 3); }
+    }
+
+    // ---- Pie de página ----
+    const n = doc.getNumberOfPages();
+    for(let i = 1; i <= n; i++){
+      doc.setPage(i);
+      doc.setDrawColor(210, 210, 210); doc.line(M, PH - 14, PW - M, PH - 14);
+      doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(150, 150, 150);
+      doc.text('Reporte generado por María José Tapia - Odontóloga', M, PH - 9);
+      doc.text('Página ' + i + ' de ' + n, PW - M, PH - 9, { align: 'right' });
+    }
+    return doc;
+  }
+
+  async function descargarPdfCompleto(args, boton){
+    const textoOriginal = boton ? boton.textContent : '';
+    if(boton){ boton.disabled = true; boton.textContent = '⏳ Generando PDF…'; }
+    try{
+      const doc = await generarPdfCompleto(args);
+      const nombre = String((args.paciente && args.paciente.nombre) || 'paciente').replace(/[^\wÁÉÍÓÚáéíóúñÑ ]+/g, '').trim().replace(/\s+/g, '_');
+      doc.save('Comprobante_' + nombre + '.pdf');
+    }catch(err){
+      alert('No se pudo generar el PDF: ' + (err && err.message ? err.message : err));
+    }finally{
+      if(boton){ boton.disabled = false; boton.textContent = textoOriginal; }
+    }
+  }
+
+  const LOGO = 'data:image/jpeg;base64,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';
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const money = (n) => '$' + Number(n || 0).toFixed(2);
+
+  function abrirLb(url){ const lb = document.getElementById('lb'); lb.querySelector('img').src = url; lb.classList.add('show'); }
+
   function pintar(data){
     const app = document.getElementById('app');
-    const r = data.ultimaReceta;
-    const medicamentos = r && r.receta ? r.receta.split('\n').map(l => l.trim()).filter(Boolean) : [];
+    const visitas = [...(data.visitas || [])].sort((a,b) => String(a.fecha).localeCompare(String(b.fecha)));
+    const visitasRecientes = [...visitas].reverse();
 
-    const filasVisitas = (data.visitas || []).map(v => `
-      <tr>
-        <td>${formatearFechaBonita(v.fecha)}</td>
-        <td>${v.tratamiento || '—'}</td>
-        <td>$${(v.abono||0).toFixed(2)}</td>
-        <td>${v.depositoFotoUrl ? `<a href="${v.depositoFotoUrl}" target="_blank"><img src="${v.depositoFotoUrl}" class="thumb"></a>` : '—'}</td>
-        <td>${v.pdfUrl ? `<a href="${v.pdfUrl}" target="_blank">Ver PDF</a>` : '—'}</td>
-      </tr>
-    `).join('');
+    // Receta: la última registrada (si el servidor no la manda, se toma de la última visita con receta)
+    let r = data.ultimaReceta;
+    if(!r || !r.receta){
+      const v = visitasRecientes.find(x => x.receta && String(x.receta).trim());
+      if(v) r = { receta: v.receta, fecha: v.fecha, tratamiento: v.tratamiento };
+    }
+    const medicamentos = r && r.receta ? String(r.receta).split('\n').map(l => l.trim().replace(/^[*•\-–]\s*/, '')).filter(Boolean) : [];
 
-    const visitas = data.visitas || [];
+    // Resumen de pagos calculado aquí mismo, con los abonos reales de cada sesión
+    const ultima = visitasRecientes[0];
+    const valor = Number((data.paciente && data.paciente.valorTratamiento) || (ultima && ultima.valorTratamiento) || (data.resumen && data.resumen.valorTratamiento) || 0);
+    const totalAbonado = visitas.length ? visitas.reduce((s,v) => s + (Number(v.abono) || 0), 0) : Number((data.resumen && data.resumen.totalAbonado) || 0);
+    const pendiente = Math.max(valor - totalAbonado, 0);
+
+    let acumulado = 0;
+    const filasPagos = visitas.map(v => {
+      acumulado += Number(v.abono) || 0;
+      const saldo = Math.max((Number(v.valorTratamiento) || valor) - acumulado, 0);
+      return `<tr><td>${formatearFechaBonita(v.fecha)}</td><td>${esc(v.tratamiento) || '—'}</td><td>${money(v.abono)}</td><td>${money(saldo)}</td></tr>`;
+    }).join('');
+
+    const galeria = (urls, clase) => `<div class="galeria ${clase||''}">${urls.map(u => `<img src="${esc(u)}" data-lb="${esc(u)}" loading="lazy">`).join('')}</div>`;
+
+    const bloquesVisitas = visitasRecientes.map(v => {
+      const dep = pdfListaUrls(v.depositoFotoUrl), antes = pdfListaUrls(v.fotoAntesUrl), despues = pdfListaUrls(v.fotoDespuesUrl);
+      return `
+        <div class="card">
+          <div class="sec" style="margin-top:0;"><div class="sec-bar">Sesión del ${formatearFechaBonita(v.fecha)} — Trabajo realizado</div>
+            <div class="sec-body">
+              <div class="fila"><span class="lbl">Tratamiento:</span><span>${esc(v.tratamiento) || '—'}</span></div>
+              ${v.notas ? `<div class="fila"><span class="lbl">Notas:</span><span>${esc(v.notas)}</span></div>` : ''}
+              <div class="fila"><span class="lbl">Abono de la sesión:</span><span><b>${money(v.abono)}</b></span></div>
+            </div></div>
+          ${dep.length ? `<div class="sec"><div class="sec-bar">Comprobante de depósito</div><div class="sec-body">${galeria(dep,'dep')}</div></div>` : ''}
+          ${antes.length ? `<div class="sec"><div class="sec-bar">Fotos antes</div><div class="sec-body">${galeria(antes)}</div></div>` : ''}
+          ${despues.length ? `<div class="sec"><div class="sec-bar">Fotos después</div><div class="sec-body">${galeria(despues)}</div></div>` : ''}
+        </div>`;
+    }).join('');
+
     const enCiclo = visitas.length % 5;
     const posicionActual = enCiclo === 0 ? (visitas.length > 0 ? 5 : 0) : enCiclo;
     const dots = Array.from({length:5}, (_, i) => `<div class="dot ${i < posicionActual ? 'filled' : ''}">${i === 4 ? '★' : i+1}</div>`).join('');
 
     app.innerHTML = `
       <div class="top-bar">
-        <img src="data:image/jpeg;base64,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" alt="Logo">
-        <div><b>María José Tapia</b><span>Odontóloga — ${data.paciente.nombre}</span></div>
+        <img src="${LOGO}" alt="Logo">
+        <div><b>María José Tapia</b><span>Odontóloga — ${esc(data.paciente.nombre)}</span></div>
       </div>
 
       <div class="tabs">
@@ -144,51 +414,67 @@
         ${r ? `
           <div class="receta-doc">
             <div class="receta-header">
-              <img src="data:image/jpeg;base64,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" alt="Logo">
+              <img src="${LOGO}" alt="Logo">
               <div><h2>María José Tapia</h2><div class="especialidad">Odontóloga</div></div>
             </div>
             <div class="receta-linea"></div>
-            <div class="receta-campo"><b>Paciente:</b> ${data.paciente.nombre}</div>
+            <div class="receta-campo"><b>Paciente:</b> ${esc(data.paciente.nombre)}</div>
             <div class="receta-campo"><b>Fecha:</b> ${formatearFechaBonita(r.fecha)}</div>
-            <div class="receta-campo"><b>Tratamiento:</b> ${r.tratamiento || '—'}</div>
-            ${medicamentos.length ? `<div class="rp">Rp.</div><ul class="med-list">${medicamentos.map(m => `<li>${m}</li>`).join('')}</ul>` : '<p class="hint" style="margin-top:14px;">No se registraron medicamentos en esta receta.</p>'}
+            <div class="receta-campo"><b>Tratamiento:</b> ${esc(r.tratamiento) || '—'}</div>
+            ${medicamentos.length ? `<div class="rp">Rp.</div><ul class="med-list">${medicamentos.map(m => `<li>${esc(m)}</li>`).join('')}</ul>` : '<p class="hint" style="margin-top:14px;">No se registraron medicamentos en esta receta.</p>'}
           </div>
+          <div class="acciones no-print"><button class="btn" id="btnImprimirReceta">🖨️ Imprimir receta</button></div>
         ` : '<p class="hint">Aún no hay ninguna receta registrada.</p>'}
       </div>
 
       <div class="panel" id="panelComprobante">
-        <div class="card">
-          <h2 style="margin:0 0 4px;font-size:16px;">${data.paciente.nombre}</h2>
-          <p class="hint" style="margin:0;">Resumen de pagos</p>
-          <div class="resumen-pagos">
-            <div class="resumen-item"><div class="monto">$${data.resumen.valorTratamiento.toFixed(2)}</div><div class="etiqueta">Valor tratamiento</div></div>
-            <div class="resumen-item"><div class="monto">$${data.resumen.totalAbonado.toFixed(2)}</div><div class="etiqueta">Abonado</div></div>
-            <div class="resumen-item pendiente"><div class="monto">$${data.resumen.pendiente.toFixed(2)}</div><div class="etiqueta">Pendiente</div></div>
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div class="doc-head"><img src="${LOGO}" alt=""><div><h2>Comprobante de pago</h2><p>${esc(data.paciente.nombre)}</p></div></div>
+          <div style="padding:6px 18px 18px;">
+            <div class="sec"><div class="sec-bar">Resumen de pagos</div>
+              <div class="resumen-pagos">
+                <div class="resumen-item"><div class="monto">${money(valor)}</div><div class="etiqueta">Valor del tratamiento</div></div>
+                <div class="resumen-item"><div class="monto">${money(totalAbonado)}</div><div class="etiqueta">Abonado</div></div>
+                <div class="resumen-item pendiente"><div class="monto">${money(pendiente)}</div><div class="etiqueta">Pendiente</div></div>
+              </div>
+            </div>
+            <div class="sec"><div class="sec-bar">Historial de abonos</div>
+              ${filasPagos ? `<table><thead><tr><th>Fecha</th><th>Tratamiento</th><th>Abono</th><th>Saldo</th></tr></thead><tbody>${filasPagos}</tbody></table>` : '<p class="hint">Aún no hay sesiones registradas.</p>'}
+            </div>
+            <div class="acciones"><button class="btn" id="btnPdfCompleto">📄 Descargar PDF completo</button></div>
+            <p class="hint" style="margin:8px 0 0;">Un solo PDF con tu depósito, el tratamiento realizado, la receta y las fotos del antes y después.</p>
           </div>
         </div>
 
-        <div class="card">
-          <h2 style="margin:0 0 4px;font-size:14.5px;">Historial de sesiones</h2>
-          ${filasVisitas ? `
-            <table>
-              <thead><tr><th>Fecha</th><th>Tratamiento</th><th>Abono</th><th>Depósito</th><th>PDF</th></tr></thead>
-              <tbody>${filasVisitas}</tbody>
-            </table>
-          ` : '<p class="hint">Aún no hay sesiones registradas.</p>'}
-        </div>
+        ${bloquesVisitas}
 
         ${visitas.length ? `
           <div class="card">
-            <h2 style="margin:0 0 4px;font-size:14.5px;">Fidelización</h2>
-            <p class="hint">${visitas.length} visita(s) registradas.</p>
-            <div class="loyalty-row">${dots}</div>
-          </div>
-        ` : ''}
+            <div class="sec" style="margin-top:0;"><div class="sec-bar">Fidelización</div>
+              <div class="sec-body"><p class="hint" style="margin-top:0;">${visitas.length} visita(s) registradas.</p><div class="loyalty-row">${dots}</div></div>
+            </div>
+          </div>` : ''}
       </div>
+
+      <div class="lb" id="lb"><img alt="Foto ampliada"></div>
     `;
 
     document.getElementById('tabReceta').addEventListener('click', () => cambiarTab('Receta'));
     document.getElementById('tabComprobante').addEventListener('click', () => cambiarTab('Comprobante'));
+    document.getElementById('lb').addEventListener('click', e => e.currentTarget.classList.remove('show'));
+    app.querySelectorAll('[data-lb]').forEach(img => img.addEventListener('click', () => abrirLb(img.dataset.lb)));
+
+    const btnImp = document.getElementById('btnImprimirReceta');
+    if(btnImp){
+      btnImp.addEventListener('click', () => {
+        document.body.classList.add('print-receta');
+        window.print();
+      });
+      window.addEventListener('afterprint', () => document.body.classList.remove('print-receta'));
+    }
+    document.getElementById('btnPdfCompleto').addEventListener('click', (e) => {
+      descargarPdfCompleto({ paciente: data.paciente, visitas, valorTratamiento: valor, receta: r ? r.receta : '' }, e.currentTarget);
+    });
   }
 
   function cambiarTab(nombre){
