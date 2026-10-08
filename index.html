@@ -238,7 +238,7 @@
   <!-- ================= PACIENTES ================= -->
   <section id="view-pacientes" class="view active">
     <div class="card">
-      <h2>Nuevo paciente</h2>
+      <h2 id="tituloFormPaciente">Nuevo paciente</h2>
       <p class="hint">Datos generales de la ficha. El resto (antecedentes, signos vitales, examen) se completa en Historia clínica.</p>
       <div class="field-grid">
         <div class="field"><label>Nombre</label><input type="text" id="np-nombre"></div>
@@ -252,6 +252,7 @@
       </div>
       <div class="btn-row">
         <button class="primary" id="btnGuardarPaciente">Guardar paciente</button>
+        <button id="btnCancelarEdicionPaciente" class="hidden">Cancelar edición</button>
       </div>
     </div>
 
@@ -453,6 +454,13 @@
       <p class="hint">Descarga un Excel con todos los pacientes registrados (datos guardados en este dispositivo).</p>
       <div class="btn-row"><button class="primary" id="btnDescargarExcel">⬇️ Descargar Excel</button></div>
     </div>
+
+    <div class="card">
+      <h2>Papelera de pacientes</h2>
+      <p class="hint">Los pacientes eliminados quedan aquí — nada se borra de verdad. Puedes recuperarlos cuando quieras.</p>
+      <div id="listaPapelera"></div>
+      <p class="empty-row hidden" id="papeleraVacia">La papelera está vacía.</p>
+    </div>
   </section>
 </main>
 
@@ -633,13 +641,14 @@
     const vacio = document.getElementById('pacientesVacio');
     tbody.innerHTML = '';
 
+    const activos = db.pacientes.filter(p => !p.archivado);
     const termino = normalizar(filtroPacientes);
     const listaFiltrada = termino
-      ? db.pacientes.filter(p => normalizar(p.nombre).includes(termino) || normalizar(p.ci).includes(termino) || normalizar(p.telefono).includes(termino))
-      : db.pacientes;
+      ? activos.filter(p => normalizar(p.nombre).includes(termino) || normalizar(p.ci).includes(termino) || normalizar(p.telefono).includes(termino))
+      : activos;
 
     vacio.classList.toggle('hidden', listaFiltrada.length > 0);
-    if(listaFiltrada.length === 0 && db.pacientes.length > 0){
+    if(listaFiltrada.length === 0 && activos.length > 0){
       vacio.textContent = 'No hay pacientes que coincidan con la búsqueda.';
       vacio.classList.remove('hidden');
     } else {
@@ -654,9 +663,29 @@
         <td>${p.edad || '—'}</td>
         <td>${p.telefono || '—'}</td>
         <td>${p.telefono ? `<a href="https://wa.me/${telefonoWhatsApp(p.telefono)}?text=${waText}" target="_blank">Abrir WhatsApp</a>` : '—'}</td>
-        <td><button data-ver="${p.id}">Ver historia</button></td>
+        <td style="white-space:nowrap;">
+          <button data-ver="${p.id}">Ver historia</button>
+          <button data-editar="${p.id}">✏️ Editar</button>
+          <button data-eliminar="${p.id}" class="danger">🗑️ Eliminar</button>
+        </td>
       `;
       tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('[data-editar]').forEach(btn => {
+      btn.addEventListener('click', () => iniciarEdicionPaciente(btn.dataset.editar));
+    });
+
+    tbody.querySelectorAll('[data-eliminar]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = db.pacientes.find(x => x.id === btn.dataset.eliminar);
+        if(!p) return;
+        if(!confirm(`¿Eliminar a ${p.nombre}? No se borra de verdad — queda en la papelera de Configuración y lo puedes recuperar cuando quieras.`)) return;
+        p.archivado = true;
+        saveDB();
+        encolarYSincronizar('guardarPaciente', p);
+        renderPacientes();
+      });
     });
 
     tbody.querySelectorAll('[data-ver]').forEach(btn => {
@@ -670,7 +699,7 @@
   }
 
   function refreshPatientSelects(){
-    const options = db.pacientes.map(p => `<option value="${p.id}">${p.nombre || 'Sin nombre'}</option>`).join('');
+    const options = db.pacientes.filter(p => !p.archivado).map(p => `<option value="${p.id}">${p.nombre || 'Sin nombre'}</option>`).join('');
     document.getElementById('ac-paciente').innerHTML = options || '<option value="">Sin pacientes</option>';
   }
 
@@ -679,28 +708,66 @@
     renderPacientes();
   });
 
+  let editandoPacienteId = null;
+
+  function iniciarEdicionPaciente(pacienteId){
+    const p = db.pacientes.find(x => x.id === pacienteId);
+    if(!p) return;
+    editandoPacienteId = pacienteId;
+    document.getElementById('np-nombre').value = p.nombre || '';
+    document.getElementById('np-sexo').value = p.sexo || '';
+    document.getElementById('np-edad').value = p.edad || '';
+    document.getElementById('np-ci').value = p.ci || '';
+    document.getElementById('np-telefono').value = p.telefono || '';
+    document.getElementById('np-nacimiento').value = p.fechaNacimiento || '';
+    document.getElementById('tituloFormPaciente').textContent = 'Editando a ' + (p.nombre || 'paciente');
+    document.getElementById('btnGuardarPaciente').textContent = 'Guardar cambios';
+    document.getElementById('btnCancelarEdicionPaciente').classList.remove('hidden');
+    document.getElementById('np-nombre').scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+
+  function cancelarEdicionPaciente(){
+    editandoPacienteId = null;
+    ['np-nombre','np-edad','np-ci','np-telefono','np-nacimiento'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('np-sexo').value = '';
+    document.getElementById('tituloFormPaciente').textContent = 'Nuevo paciente';
+    document.getElementById('btnGuardarPaciente').textContent = 'Guardar paciente';
+    document.getElementById('btnCancelarEdicionPaciente').classList.add('hidden');
+  }
+
+  document.getElementById('btnCancelarEdicionPaciente').addEventListener('click', cancelarEdicionPaciente);
+
   document.getElementById('btnGuardarPaciente').addEventListener('click', () => {
     const nombre = document.getElementById('np-nombre').value.trim();
     if(!nombre){ alert('Ingresa al menos el nombre del paciente.'); return; }
-    const nuevo = {
-      id: uid('pac'),
+
+    const datosFormulario = {
       nombre,
       sexo: document.getElementById('np-sexo').value,
       edad: document.getElementById('np-edad').value,
       ci: document.getElementById('np-ci').value,
       telefono: document.getElementById('np-telefono').value,
-      fechaNacimiento: document.getElementById('np-nacimiento').value,
-      motivoConsulta: '',
-      antecedentes: {},
-      signosVitales: {},
-      examen: {}
+      fechaNacimiento: document.getElementById('np-nacimiento').value
     };
-    db.pacientes.push(nuevo);
+
+    let pacienteGuardado;
+    if(editandoPacienteId){
+      const p = db.pacientes.find(x => x.id === editandoPacienteId);
+      if(!p){ cancelarEdicionPaciente(); return; }
+      Object.assign(p, datosFormulario);
+      pacienteGuardado = p;
+    } else {
+      pacienteGuardado = {
+        id: uid('pac'), ...datosFormulario,
+        motivoConsulta: '', antecedentes: {}, signosVitales: {}, examen: {}
+      };
+      db.pacientes.push(pacienteGuardado);
+    }
+
     saveDB();
-    encolarYSincronizar('guardarPaciente', nuevo);
-    ['np-nombre','np-edad','np-ci','np-telefono','np-nacimiento'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('np-sexo').value = '';
-    selectedPatientId = nuevo.id;
+    encolarYSincronizar('guardarPaciente', pacienteGuardado);
+    selectedPatientId = pacienteGuardado.id;
+    cancelarEdicionPaciente();
     renderPacientes();
   });
 
@@ -868,14 +935,15 @@
   const resultadosHistoria = document.getElementById('resultadosPacienteHistoria');
 
   function mostrarResultadosHistoria(termino){
+    const activos = db.pacientes.filter(p => !p.archivado);
     const t = normalizar(termino);
     const coincidencias = t
-      ? db.pacientes.filter(p =>
+      ? activos.filter(p =>
           normalizar(p.nombre).includes(t) ||
           normalizar(p.ci).includes(t) ||
           normalizar(p.telefono).includes(t)
         )
-      : db.pacientes;
+      : activos;
 
     resultadosHistoria.innerHTML = coincidencias.length
       ? coincidencias.map(p => `<div class="item" data-id="${p.id}">${p.nombre || 'Sin nombre'}${p.telefono ? ` <span style="color:var(--ink-soft);font-size:12.5px;">— ${p.telefono}</span>` : ''}</div>`).join('')
@@ -1317,6 +1385,30 @@
   // ---------- CONFIGURACIÓN ----------
   function renderConfiguracion(){
     document.getElementById('cfg-correo').value = (db.config && db.config.correoNotificaciones) || '';
+    renderPapelera();
+  }
+
+  function renderPapelera(){
+    const archivados = db.pacientes.filter(p => p.archivado);
+    const cont = document.getElementById('listaPapelera');
+    const vacia = document.getElementById('papeleraVacia');
+    vacia.classList.toggle('hidden', archivados.length > 0);
+    cont.innerHTML = archivados.map(p => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);">
+        <span>${p.nombre || 'Sin nombre'}</span>
+        <button data-restaurar="${p.id}">♻️ Restaurar</button>
+      </div>
+    `).join('');
+    cont.querySelectorAll('[data-restaurar]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const p = db.pacientes.find(x => x.id === btn.dataset.restaurar);
+        if(!p) return;
+        p.archivado = false;
+        saveDB();
+        encolarYSincronizar('guardarPaciente', p);
+        renderPapelera();
+      });
+    });
   }
 
   document.getElementById('btnGuardarCorreo').addEventListener('click', () => {
