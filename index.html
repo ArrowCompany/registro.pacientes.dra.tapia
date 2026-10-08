@@ -750,6 +750,7 @@
       fechaNacimiento: document.getElementById('np-nacimiento').value
     };
 
+    const eraNuevo = !editandoPacienteId;
     let pacienteGuardado;
     if(editandoPacienteId){
       const p = db.pacientes.find(x => x.id === editandoPacienteId);
@@ -769,6 +770,12 @@
     selectedPatientId = pacienteGuardado.id;
     cancelarEdicionPaciente();
     renderPacientes();
+
+    // Si es un paciente nuevo, vamos directo a su ficha en Historia clínica.
+    // Si fue una edición, nos quedamos en Pacientes (puede seguir editando a otros).
+    if(eraNuevo){
+      document.querySelector('.tab-btn[data-tab="historia"]').click();
+    }
   });
 
   // ---------- AGENDA ----------
