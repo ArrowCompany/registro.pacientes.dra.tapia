@@ -53,6 +53,14 @@
   .rp{ font-size:20px; font-weight:800; color:var(--pink-dark); margin:12px 0 4px; }
   .med-list{ margin:0; padding-left:18px; font-size:14px; line-height:1.9; }
 
+  .receta-tag{ display:inline-block; background:var(--teal,#127a85); color:#fff; font-weight:700; font-size:13px; padding:4px 10px; border-radius:8px; margin-bottom:8px; }
+  .receta-ant-tit{ font-size:13px; font-weight:700; color:var(--ink-soft); margin:20px 0 4px; }
+  .receta-ant-btn{ width:100%; display:flex; justify-content:space-between; align-items:center; background:var(--cream); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-top:8px; font:inherit; font-size:14px; font-weight:600; color:var(--ink); cursor:pointer; text-align:left; }
+  .receta-ant-btn .flecha{ transition:transform .2s; }
+  .receta-ant-btn.abierta .flecha{ transform:rotate(180deg); }
+  .receta-ant-cuerpo{ display:none; margin-top:8px; }
+  .receta-ant-cuerpo.abierta{ display:block; }
+
   /* Comprobante */
   .resumen-pagos{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
   .resumen-item{ flex:1; min-width:130px; background:var(--cream); border-radius:10px; padding:12px; text-align:center; }
@@ -363,19 +371,15 @@
       h.ensure(14);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(130, 130, 130);
       doc.text('FECHA', M + 3, h.y); doc.text('TRATAMIENTO', M + 30, h.y);
-      doc.text('ABONO', M + 120, h.y, { align: 'right' }); doc.text('SALDO', M + CW - 3, h.y, { align: 'right' });
+      doc.text('ABONO', M + CW - 3, h.y, { align: 'right' });
       h.y += 2; doc.setDrawColor(220, 220, 220); doc.line(M, h.y, M + CW, h.y); h.y += 5;
-      let acumulado = 0;
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(30, 30, 30);
       lista.forEach(v => {
-        acumulado += Number(v.abono) || 0;
-        const saldo = Math.max((Number(v.valorTratamiento) || valor) - acumulado, 0);
         const trat = doc.splitTextToSize(limpiar(v.tratamiento) || '—', 80);
         h.ensure(trat.length * 5 + 3);
         doc.text(fmtFecha(v.fecha), M + 3, h.y);
         doc.text(trat, M + 30, h.y);
-        doc.text(money(v.abono), M + 120, h.y, { align: 'right' });
-        doc.text(money(saldo), M + CW - 3, h.y, { align: 'right' });
+        doc.text(money(v.abono), M + CW - 3, h.y, { align: 'right' });
         h.y += trat.length * 5; doc.setDrawColor(235, 235, 235); doc.line(M, h.y - 2, M + CW, h.y - 2); h.y += 2;
       });
     }
@@ -432,6 +436,27 @@
     else if(data.ultimaReceta && data.ultimaReceta.receta) r = data.ultimaReceta;
     const medicamentos = r && r.receta ? String(r.receta).split('\n').map(l => l.trim().replace(/^[*•\-–]\s*/, '')).filter(Boolean) : [];
 
+    // Recetas anteriores: visitas con receta, de la más nueva a la más vieja, sin la actual
+    const recetasAnteriores = visitasRecientes.filter(x => x.receta && String(x.receta).trim()).slice(vReceta ? 1 : 0);
+    const htmlReceta = (rr, meds) => `
+          <div class="receta-doc">
+            <div class="receta-header">
+              <img src="${LOGO}" alt="Logo">
+              <div><h2>María José Tapia</h2><div class="especialidad">Odontóloga</div></div>
+            </div>
+            <div class="receta-linea"></div>
+            <div class="receta-campo"><b>Paciente:</b> ${esc(data.paciente.nombre)}</div>
+            <div class="receta-campo"><b>Fecha:</b> ${formatearFechaBonita(rr.fecha)}</div>
+            <div class="receta-campo"><b>Tratamiento:</b> ${esc(rr.tratamiento) || '—'}</div>
+            ${meds.length ? `<div class="rp">Rp.</div><ul class="med-list">${meds.map(m => `<li>${esc(m)}</li>`).join('')}</ul>` : '<p class="hint" style="margin-top:14px;">No se registraron medicamentos en esta receta.</p>'}
+          </div>`;
+    const parseMeds = (t) => String(t || '').split('\n').map(l => l.trim().replace(/^[*•\-–]\s*/, '')).filter(Boolean);
+    const anterioresHtml = recetasAnteriores.length ? `
+        <div class="receta-ant-tit no-print">Recetas anteriores</div>
+        ${recetasAnteriores.map((ra, k) => `
+          <button class="receta-ant-btn no-print" data-ant="${k}"><span>Receta anterior ${formatearFechaBonita(ra.fecha)}</span><span class="flecha">▾</span></button>
+          <div class="receta-ant-cuerpo no-print" id="recetaAnt${k}">${htmlReceta(ra, parseMeds(ra.receta))}</div>`).join('')}` : '';
+
     // Resumen de pagos calculado aquí mismo, con los abonos reales de cada sesión
     // El total vigente es el de la visita más reciente que tenga valor (ya incluye cargos adicionales como una extracción).
     const ultimaConValor = visitasRecientes.find(x => num(x.valorTratamiento) > 0);
@@ -443,12 +468,9 @@
     const totalAbonado = visitas.length ? visitas.reduce((s,v) => s + num(v.abono), 0) : num(data.resumen && data.resumen.totalAbonado);
     const pendiente = Math.max(valor - totalAbonado, 0);
 
-    let acumulado = 0;
     const filasPagos = visitas.map((v, i) => {
-      acumulado += num(v.abono);
-      const saldo = Math.max((num(v.valorTratamiento) || valor) - acumulado, 0);
       const tieneDep = pdfListaUrls(v.depositoFotoUrl).length > 0 || /^https?:/.test(String(v.depositoPdfUrl || ''));
-      return `<tr><td>${formatearFechaBonita(v.fecha)}</td><td>${esc(v.tratamiento) || '—'}${cargos[i] > 0 ? `<div class="hint" style="margin:2px 0 0;font-size:11px;">Cargo adicional +${money(cargos[i])}</div>` : ''}</td><td>${money(v.abono)}</td><td>${money(saldo)}</td>
+      return `<tr><td>${formatearFechaBonita(v.fecha)}</td><td>${esc(v.tratamiento) || '—'}${cargos[i] > 0 ? `<div class="hint" style="margin:2px 0 0;font-size:11px;">Cargo adicional +${money(cargos[i])}</div>` : ''}</td><td>${money(v.abono)}</td>
         <td>${tieneDep ? `<button class="btn-teal" data-dep="${i}">Ver pdf</button>` : '—'}</td></tr>`;
     }).join('');
 
@@ -485,18 +507,10 @@
 
       <div class="panel active" id="panelReceta">
         ${r ? `
-          <div class="receta-doc">
-            <div class="receta-header">
-              <img src="${LOGO}" alt="Logo">
-              <div><h2>María José Tapia</h2><div class="especialidad">Odontóloga</div></div>
-            </div>
-            <div class="receta-linea"></div>
-            <div class="receta-campo"><b>Paciente:</b> ${esc(data.paciente.nombre)}</div>
-            <div class="receta-campo"><b>Fecha:</b> ${formatearFechaBonita(r.fecha)}</div>
-            <div class="receta-campo"><b>Tratamiento:</b> ${esc(r.tratamiento) || '—'}</div>
-            ${medicamentos.length ? `<div class="rp">Rp.</div><ul class="med-list">${medicamentos.map(m => `<li>${esc(m)}</li>`).join('')}</ul>` : '<p class="hint" style="margin-top:14px;">No se registraron medicamentos en esta receta.</p>'}
-          </div>
+          <span class="receta-tag no-print">Receta actual ${formatearFechaBonita(r.fecha)}</span>
+          ${htmlReceta(r, medicamentos)}
           <div class="acciones no-print"><button class="btn" id="btnImprimirReceta">🖨️ Imprimir receta</button></div>
+          ${anterioresHtml}
         ` : '<p class="hint">Aún no hay ninguna receta registrada.</p>'}
       </div>
 
@@ -513,7 +527,7 @@
               ${totalExtras > 0 ? `<p class="hint" style="margin:8px 0 0;">El valor incluye ${money(totalExtras)} en procedimientos adicionales.</p>` : ''}
             </div>
             <div class="sec"><div class="sec-bar">Historial de abonos</div>
-              ${filasPagos ? `<table><thead><tr><th>Fecha</th><th>Tratamiento</th><th>Abono</th><th>Saldo</th><th>Comprobante</th></tr></thead><tbody>${filasPagos}</tbody></table>` : '<p class="hint">Aún no hay sesiones registradas.</p>'}
+              ${filasPagos ? `<table><thead><tr><th>Fecha</th><th>Tratamiento</th><th>Abono</th><th>Comprobante</th></tr></thead><tbody>${filasPagos}</tbody></table>` : '<p class="hint">Aún no hay sesiones registradas.</p>'}
             </div>
           </div>
         </div>
@@ -535,6 +549,11 @@
     document.getElementById('tabComprobante').addEventListener('click', () => cambiarTab('Comprobante'));
     document.getElementById('lb').addEventListener('click', e => e.currentTarget.classList.remove('show'));
     app.querySelectorAll('[data-lb]').forEach(img => img.addEventListener('click', () => abrirLb(img.dataset.lb)));
+
+    app.querySelectorAll('[data-ant]').forEach(b => b.addEventListener('click', () => {
+      b.classList.toggle('abierta');
+      document.getElementById('recetaAnt' + b.dataset.ant).classList.toggle('abierta');
+    }));
 
     const btnImp = document.getElementById('btnImprimirReceta');
     if(btnImp){

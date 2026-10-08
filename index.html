@@ -1890,7 +1890,7 @@
       h.ensure(14);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(130, 130, 130);
       doc.text('FECHA', M + 3, h.y); doc.text('TRATAMIENTO', M + 30, h.y);
-      doc.text('ABONO', M + 120, h.y, { align: 'right' }); doc.text('SALDO', M + CW - 3, h.y, { align: 'right' });
+      doc.text('ABONO', M + CW - 3, h.y, { align: 'right' });
       h.y += 2; doc.setDrawColor(220, 220, 220); doc.line(M, h.y, M + CW, h.y); h.y += 5;
       let acumulado = 0;
       doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(30, 30, 30);
@@ -1901,8 +1901,7 @@
         h.ensure(trat.length * 5 + 3);
         doc.text(fmtFecha(v.fecha), M + 3, h.y);
         doc.text(trat, M + 30, h.y);
-        doc.text(money(v.abono), M + 120, h.y, { align: 'right' });
-        doc.text(money(saldo), M + CW - 3, h.y, { align: 'right' });
+        doc.text(money(v.abono), M + CW - 3, h.y, { align: 'right' });
         h.y += trat.length * 5; doc.setDrawColor(235, 235, 235); doc.line(M, h.y - 2, M + CW, h.y - 2); h.y += 2;
       });
     }
