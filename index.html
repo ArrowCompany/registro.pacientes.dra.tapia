@@ -520,6 +520,7 @@
   }
 
   let db = loadDB();
+  normalizarFechas(db);
   let selectedPatientId = db.pacientes[0] ? db.pacientes[0].id : null;
 
   // ---------- SINCRONIZACIÓN CON APPS SCRIPT (con cola por si se corta el internet) ----------
@@ -643,6 +644,24 @@
     else if(tab === 'config') renderConfiguracion();
   }
 
+  // Formato: 2026-10-08 09:00 am
+  function fechaHora(fecha, hora){
+    const f = String(fecha || '').slice(0,10);
+    const m = String(hora || '').match(/^(\d{1,2}):(\d{2})/);
+    if(!m) return f;
+    let h = Number(m[1]); const suf = h >= 12 ? 'pm' : 'am';
+    h = h % 12 || 12;
+    return f + ' ' + String(h).padStart(2,'0') + ':' + m[2] + ' ' + suf;
+  }
+
+  // Google Sheets devuelve las fechas como 2026-10-08T05:00:00.000Z; aquí se dejan como 2026-10-08.
+  function normalizarFechas(base){
+    const limpia = (f) => (typeof f === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(f)) ? f.slice(0,10) : f;
+    (base.visitas || []).forEach(v => { v.fecha = limpia(v.fecha); });
+    (base.citas || []).forEach(c => { c.fecha = limpia(c.fecha); });
+    (base.pacientes || []).forEach(p => { p.fechaNacimiento = limpia(p.fechaNacimiento); });
+  }
+
   async function cargarDesdeBackend(){
     if(!backendConfigurado()) return false;
     try{
@@ -662,6 +681,7 @@
       fusionar('pacientes', 'guardarPaciente');
       fusionar('visitas', 'guardarVisita');
       fusionar('citas', 'guardarCita');
+      normalizarFechas(remotoDB);
       db = remotoDB;
       saveDB();
       renderizarPestanaActiva();
@@ -891,7 +911,7 @@
       const paciente = db.pacientes.find(p => p.id === c.pacienteId);
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${c.hora}</td>
+        <td>${fechaHora(c.fecha, c.hora)}</td>
         <td>${paciente ? paciente.nombre : '—'}</td>
         <td>${c.motivo || '—'}</td>
         <td><span class="badge ${c.estado}">${c.estado}</span></td>
@@ -1328,6 +1348,7 @@
 
     const nuevaVisita = {
       id: uid('visita'), pacienteId: selectedPatientId, fecha,
+      hora: new Date().toTimeString().slice(0,5),
       tratamiento: document.getElementById('nv-tratamiento').value,
       valorTratamiento, abono, pendiente,
       notas: document.getElementById('nv-notas').value,
@@ -1397,7 +1418,7 @@
       const fotosAntes = Array.isArray(v.fotoAntesUrl) ? v.fotoAntesUrl : (v.fotoAntesUrl ? [v.fotoAntesUrl] : []);
       const fotosDespues = Array.isArray(v.fotoDespuesUrl) ? v.fotoDespuesUrl : (v.fotoDespuesUrl ? [v.fotoDespuesUrl] : []);
       const tienePdf = v.pdfUrl && v.pdfUrl.startsWith('http');
-      const waTexto = encodeURIComponent(`Hola ${paciente ? paciente.nombre : ''}, aquí está el comprobante de tu consulta del ${v.fecha}:\n\n${v.pdfUrl || ''}`);
+      const waTexto = encodeURIComponent(`Hola ${paciente ? paciente.nombre : ''}, aquí está el comprobante de tu consulta del ${fechaHora(v.fecha, v.hora)}:\n\n${v.pdfUrl || ''}`);
       const waHref = paciente && paciente.telefono ? `https://wa.me/${telefonoWhatsApp(paciente.telefono)}?text=${waTexto}` : '';
 
       const div = document.createElement('div');
@@ -1406,7 +1427,7 @@
       div.innerHTML = `
         <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
           <div>
-            <b>${v.fecha}</b> — ${v.tratamiento || 'Sin tratamiento especificado'}
+            <b>${fechaHora(v.fecha, v.hora)}</b> — ${v.tratamiento || 'Sin tratamiento especificado'}
             <div class="visita-seccion"><div class="vs-bar">Notas</div><div class="vs-body">${v.notas || '—'}</div></div>
             ${v.receta ? `<div class="visita-seccion"><div class="vs-bar">Receta</div><div class="vs-body">${v.receta}</div></div>` : ''}
             <div class="visita-seccion"><div class="vs-bar">Pagos</div><div class="vs-body">Valor tratamiento: $${(v.valorTratamiento||0).toFixed(2)} · Abono: $${(v.abono||0).toFixed(2)} · Pendiente: $${(v.pendiente||0).toFixed(2)}</div></div>
@@ -1452,11 +1473,11 @@
     const medsLista = (visita.receta || '').split('\n').map(l => l.trim().replace(/^[*•\-–]\s*/, '')).filter(Boolean);
     const dep = pdfListaUrls(visita.depositoFotoUrl);
     printArea.innerHTML = `
-      <div class="pa-head"><h2>María José Tapia — Odontóloga</h2><p>Comprobante de tratamiento · ${visita.fecha}</p></div>
+      <div class="pa-head"><h2>María José Tapia — Odontóloga</h2><p>Comprobante de tratamiento · ${fechaHora(visita.fecha, visita.hora)}</p></div>
       <div class="pa-bar">Información del paciente</div>
       <div class="pa-row"><span>Nombre:</span><span>${paciente ? paciente.nombre : '—'}</span></div>
       <div class="pa-bar">Trabajo realizado</div>
-      <div class="pa-row"><span>Fecha:</span><span>${visita.fecha}</span></div>
+      <div class="pa-row"><span>Fecha:</span><span>${fechaHora(visita.fecha, visita.hora)}</span></div>
       <div class="pa-row"><span>Tratamiento:</span><span>${visita.tratamiento || '—'}</span></div>
       <div class="pa-row"><span>Notas:</span><span>${visita.notas || '—'}</span></div>
       ${medsLista.length ? `<div class="pa-bar">Receta</div><div class="pa-row"><span><b>Rp.</b></span></div>${medsLista.map(m => `<div class="pa-row"><span>•</span><span>${m}</span></div>`).join('')}` : ''}
