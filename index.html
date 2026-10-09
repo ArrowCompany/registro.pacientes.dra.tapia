@@ -1625,7 +1625,7 @@
       const fotosDespues = Array.isArray(v.fotoDespuesUrl) ? v.fotoDespuesUrl : (v.fotoDespuesUrl ? [v.fotoDespuesUrl] : []);
       const tienePdf = v.pdfUrl && v.pdfUrl.startsWith('http');
       const tieneDepPdf = v.depositoPdfUrl && String(v.depositoPdfUrl).startsWith('http');
-      const waTexto = encodeURIComponent(`Hola ${paciente ? paciente.nombre : ''}, aquí está el comprobante de tu consulta del ${fechaHora(v.fecha, v.hora)}:\n\n${v.pdfUrl || ''}`);
+      const waTexto = encodeURIComponent(`Hola ${paciente ? paciente.nombre : ''}, aquí puedes ver el resumen de tu consulta, tu receta y tus pagos:\n\n${linkDelPaciente(v.pacienteId)}`);
       const waHref = paciente && paciente.telefono ? `https://wa.me/${telefonoWhatsApp(paciente.telefono)}?text=${waTexto}` : '';
 
       const div = document.createElement('div');
@@ -1647,7 +1647,7 @@
             </div>
             ${tienePdf ? `<a href="${v.pdfUrl}" target="_blank">Ver PDF guardado</a>` : ''}
             ${tieneDepPdf ? `<a href="${v.depositoPdfUrl}" target="_blank">Ver PDF del depósito</a>` : ''}
-            ${tienePdf && waHref ? `<a href="${waHref}" target="_blank"><button>📲 Enviar por WhatsApp</button></a>` : ''}
+            ${waHref ? `<a href="${waHref}" target="_blank"><button>📲 Enviar por WhatsApp</button></a>` : ''}
             <button data-pdf="${v.id}">Imprimir / PDF local</button>
           </div>
         </div>
