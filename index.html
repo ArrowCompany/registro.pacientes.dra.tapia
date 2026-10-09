@@ -49,6 +49,31 @@
     padding:7px 13px; border-radius:999px; border:1px solid var(--line); background:var(--cream);
     color:var(--ink); font-size:12.5px; font-weight:600; cursor:pointer;
   }
+  .icon-btn{ padding:7px 11px; font-size:15px; line-height:1; }
+  .bell-wrap{ position:relative; }
+  .bell-badge{
+    position:absolute; top:-5px; right:-5px; min-width:18px; height:18px; padding:0 5px;
+    border-radius:999px; background:#D6472E; color:#fff; font-size:11px; font-weight:700;
+    display:flex; align-items:center; justify-content:center; pointer-events:none;
+  }
+  .bell-badge.hidden{ display:none; }
+  .alertas-panel{
+    position:absolute; right:0; top:calc(100% + 10px); width:min(360px, calc(100vw - 28px)); z-index:50;
+    background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:20px;
+    box-shadow:0 12px 32px rgba(0,0,0,.18); overflow:hidden; display:none;
+  }
+  .alertas-panel.abierto{ display:block; }
+  .alertas-head{ display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--line); }
+  .alertas-head b{ font-size:18px; }
+  .alertas-head button{ border:none; background:transparent; color:var(--teal-dark); font-size:15px; font-weight:700; cursor:pointer; padding:4px; }
+  .alertas-lista{ max-height:min(60vh, 420px); overflow-y:auto; }
+  .alertas-vacio{ padding:26px 20px; text-align:center; color:var(--ink-soft); font-size:15px; }
+  .alerta-item{ display:flex; gap:10px; padding:12px 20px; border-bottom:1px solid var(--line); align-items:flex-start; }
+  .alerta-item:last-child{ border-bottom:none; }
+  .alerta-item .ico{ font-size:17px; line-height:1.3; }
+  .alerta-item .txt{ font-size:13.5px; line-height:1.35; word-break:break-word; }
+  .alerta-item .hora{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .alerta-item.error .txt{ color:#D6472E; font-weight:600; }
   .tabs{
     display:flex; gap:4px; margin-top:12px; overflow-x:auto;
   }
@@ -241,7 +266,15 @@
       </div>
       <div style="display:flex;gap:8px;">
         <button type="button" id="btnActualizarDatos" class="theme-toggle-btn">🔄 Actualizar</button>
-        <button type="button" id="themeToggle" class="theme-toggle-btn">🌙 Modo oscuro</button>
+        <button type="button" id="themeToggle" class="theme-toggle-btn icon-btn" aria-label="Cambiar modo claro/oscuro" title="Modo claro / oscuro">🌙</button>
+        <div class="bell-wrap">
+          <button type="button" id="btnAlertas" class="theme-toggle-btn icon-btn" aria-label="Alertas" title="Alertas">🔔</button>
+          <span class="bell-badge hidden" id="alertasBadge">0</span>
+          <div class="alertas-panel" id="alertasPanel">
+            <div class="alertas-head"><b>Alertas</b><button type="button" id="btnLimpiarAlertas">Limpiar</button></div>
+            <div class="alertas-lista" id="alertasLista"></div>
+          </div>
+        </div>
       </div>
     </div>
     <nav class="tabs">
@@ -511,20 +544,98 @@
   }
   function saveDB(){
     try{ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
-    catch(e){ console.warn('No se pudo guardar en el navegador (memoria llena):', e); }
+    catch(e){ console.warn('No se pudo guardar en el navegador (memoria llena):', e); if(typeof registrarAlerta === 'function') registrarAlerta('error', 'No se pudo guardar en este dispositivo (memoria llena).'); }
   }
   function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
   // Normaliza el teléfono para WhatsApp: si empieza en 0 (formato local Ecuador), lo cambia por 593.
   function telefonoWhatsApp(telefono){
-    let limpio = (telefono || '').replace(/\D/g, '');
+    let limpio = String(telefono == null ? '' : telefono).replace(/\D/g, '');
     if(limpio.startsWith('0')) limpio = '593' + limpio.slice(1);
+    else if(limpio.length === 9 && limpio.startsWith('9')) limpio = '593' + limpio; // Sheets a veces borra el 0 inicial
     return limpio;
   }
 
   let db = loadDB();
   normalizarFechas(db);
   let selectedPatientId = db.pacientes[0] ? db.pacientes[0].id : null;
+
+  // ---------- ALERTAS (campana): historial de todo lo que pasa en el panel ----------
+  const ALERTAS_KEY = 'clinica_dental_alertas_v1';
+  const ALERTAS_LEIDAS_KEY = 'clinica_dental_alertas_leidas_v1';
+  let alertasLista = [];
+  let alertasLeidasTs = 0;
+  try{ alertasLista = JSON.parse(localStorage.getItem(ALERTAS_KEY)) || []; }catch(e){ alertasLista = []; }
+  try{ alertasLeidasTs = Number(localStorage.getItem(ALERTAS_LEIDAS_KEY)) || 0; }catch(e){}
+  const ALERTA_ICONOS = { ok:'✅', paciente:'👤', cita:'📅', consulta:'🦷', borrar:'🗑️', restaurar:'♻️', error:'⚠️', info:'ℹ️' };
+  function escAl(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  function guardarAlertas(){
+    try{ localStorage.setItem(ALERTAS_KEY, JSON.stringify(alertasLista)); }catch(e){}
+  }
+  function registrarAlerta(tipo, texto){
+    alertasLista.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2,5), tipo, texto: String(texto), ts: Date.now() });
+    if(alertasLista.length > 100) alertasLista.length = 100;
+    guardarAlertas();
+    pintarAlertas();
+  }
+  function horaAlerta(ts){
+    const d = new Date(ts), hoy = new Date();
+    const hm = d.toTimeString().slice(0,5);
+    if(d.toDateString() === hoy.toDateString()) return 'Hoy ' + hm;
+    return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + ' ' + hm;
+  }
+  function pintarAlertas(){
+    const lista = document.getElementById('alertasLista');
+    const badge = document.getElementById('alertasBadge');
+    if(!lista || !badge) return;
+    lista.innerHTML = alertasLista.length
+      ? alertasLista.map(a => `<div class="alerta-item ${a.tipo === 'error' ? 'error' : ''}"><span class="ico">${ALERTA_ICONOS[a.tipo] || 'ℹ️'}</span><div><div class="txt">${escAl(a.texto)}</div><div class="hora">${horaAlerta(a.ts)}</div></div></div>`).join('')
+      : '<div class="alertas-vacio">Sin alertas que mostrar</div>';
+    const panelAbierto = document.getElementById('alertasPanel').classList.contains('abierto');
+    const nuevas = panelAbierto ? 0 : alertasLista.filter(a => a.ts > alertasLeidasTs).length;
+    badge.textContent = nuevas > 99 ? '99+' : nuevas;
+    badge.classList.toggle('hidden', nuevas === 0);
+  }
+  function marcarAlertasLeidas(){
+    alertasLeidasTs = Date.now();
+    try{ localStorage.setItem(ALERTAS_LEIDAS_KEY, String(alertasLeidasTs)); }catch(e){}
+  }
+  document.getElementById('btnAlertas').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const panel = document.getElementById('alertasPanel');
+    const abrir = !panel.classList.contains('abierto');
+    panel.classList.toggle('abierto', abrir);
+    if(abrir) marcarAlertasLeidas();
+    pintarAlertas();
+  });
+  document.getElementById('btnLimpiarAlertas').addEventListener('click', (e) => {
+    e.stopPropagation();
+    alertasLista = [];
+    guardarAlertas();
+    pintarAlertas();
+  });
+  document.getElementById('alertasPanel').addEventListener('click', e => e.stopPropagation());
+  document.addEventListener('click', () => {
+    const panel = document.getElementById('alertasPanel');
+    if(panel.classList.contains('abierto')){ panel.classList.remove('abierto'); marcarAlertasLeidas(); pintarAlertas(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape'){ const panel = document.getElementById('alertasPanel'); if(panel.classList.contains('abierto')){ panel.classList.remove('abierto'); marcarAlertasLeidas(); pintarAlertas(); } }
+  });
+  // Qué es cada envío de la cola, para los mensajes de error
+  function etiquetaEnvio(item){
+    const pl = item.payload || {};
+    const nombrePac = (id) => { const x = db.pacientes.find(q => q.id === id); return x ? x.nombre : ''; };
+    switch(item.action){
+      case 'guardarPaciente': return 'el contacto ' + (pl.nombre || '');
+      case 'guardarVisita': return 'la consulta de ' + (nombrePac(pl.pacienteId) || 'un paciente');
+      case 'guardarCita': return 'la cita de ' + (nombrePac(pl.pacienteId) || 'un paciente');
+      case 'notificarCita': return 'el aviso de cita de ' + (pl.pacienteNombre || 'un paciente');
+      case 'actualizarCitaEstado': return 'el estado de una cita';
+      case 'guardarConfiguracion': return 'la configuración';
+      default: return 'un cambio';
+    }
+  }
 
   // ---------- SINCRONIZACIÓN CON APPS SCRIPT (con cola por si se corta el internet) ----------
   function backendConfigurado(){
@@ -625,6 +736,7 @@
         }
         if(item.intentos >= 5){
           item.fallido = true;
+          registrarAlerta('error', 'Error al guardar ' + etiquetaEnvio(item) + ' en Google Sheets: ' + String(item.ultimoError).slice(0, 140));
           saveQueue(queue);
           i++;
           continue;
@@ -693,9 +805,15 @@
     const limpia = (f) => (typeof f === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(f)) ? f.slice(0,10) : f;
     (base.visitas || []).forEach(v => { v.fecha = limpia(v.fecha); });
     (base.citas || []).forEach(c => { c.fecha = limpia(c.fecha); });
-    (base.pacientes || []).forEach(p => { p.fechaNacimiento = limpia(p.fechaNacimiento); });
+    (base.pacientes || []).forEach(p => {
+      p.fechaNacimiento = limpia(p.fechaNacimiento);
+      // Google Sheets guarda teléfono y cédula como número: se pasan a texto para que no fallen las búsquedas ni WhatsApp.
+      if(p.telefono != null && typeof p.telefono !== 'string') p.telefono = String(p.telefono);
+      if(p.ci != null && typeof p.ci !== 'string') p.ci = String(p.ci);
+    });
   }
 
+  let ultimoErrorBackend = '';
   async function cargarDesdeBackend(){
     if(!backendConfigurado()) return false;
     try{
@@ -723,6 +841,7 @@
       return true;
     }catch(err){
       console.warn('No se pudo cargar desde el backend, se usan los datos locales.', err);
+      ultimoErrorBackend = (err && err.message) ? err.message : String(err);
       return false;
     }
   }
@@ -735,7 +854,12 @@
     const ok = await cargarDesdeBackend();
     btn.textContent = original;
     btn.disabled = false;
-    if(!ok) alert('No se pudo actualizar — revisa tu conexión a internet.');
+    if(!ok){
+      registrarAlerta('error', 'No se pudo actualizar los datos' + (ultimoErrorBackend ? ': ' + ultimoErrorBackend : '.'));
+      alert('No se pudo actualizar — revisa tu conexión a internet.' + (ultimoErrorBackend ? '\n\nDetalle técnico: ' + ultimoErrorBackend : ''));
+    } else {
+      registrarAlerta('ok', 'Datos actualizados desde Google Sheets (' + db.pacientes.filter(x => !x.archivado).length + ' pacientes).');
+    }
   });
 
   window.addEventListener('online', procesarCola);
@@ -835,6 +959,7 @@
         p.archivado = true;
         saveDB();
         encolarYSincronizar('guardarPaciente', p);
+        registrarAlerta('borrar', 'Se eliminó al paciente ' + p.nombre + ' (queda en la papelera).');
         renderPacientes();
       });
     });
@@ -918,6 +1043,7 @@
 
     saveDB();
     encolarYSincronizar('guardarPaciente', pacienteGuardado);
+    registrarAlerta('paciente', (eraNuevo ? 'Nuevo paciente registrado: ' : 'Se actualizaron los datos de ') + pacienteGuardado.nombre + '.');
     selectedPatientId = pacienteGuardado.id;
     cancelarEdicionPaciente();
     renderPacientes();
@@ -961,12 +1087,14 @@
       const cita = db.citas.find(c => c.id === btn.dataset.completar);
       cita.estado = 'completada'; saveDB();
       encolarYSincronizar('actualizarCitaEstado', { id: cita.id, estado: cita.estado });
+      registrarAlerta('cita', 'Cita completada: ' + ((db.pacientes.find(x => x.id === cita.pacienteId) || {}).nombre || 'paciente') + ' (' + fechaHora(cita.fecha, cita.hora) + ').');
       renderAgenda();
     }));
     tbody.querySelectorAll('[data-cancelar]').forEach(btn => btn.addEventListener('click', () => {
       const cita = db.citas.find(c => c.id === btn.dataset.cancelar);
       cita.estado = 'cancelada'; saveDB();
       encolarYSincronizar('actualizarCitaEstado', { id: cita.id, estado: cita.estado });
+      registrarAlerta('borrar', 'Cita cancelada: ' + ((db.pacientes.find(x => x.id === cita.pacienteId) || {}).nombre || 'paciente') + ' (' + fechaHora(cita.fecha, cita.hora) + ').');
       renderAgenda();
     }));
   }
@@ -986,6 +1114,7 @@
     saveDB();
     encolarYSincronizar('guardarCita', nuevaCita);
     const pacienteCita = db.pacientes.find(p => p.id === pacienteId);
+    registrarAlerta('cita', 'Cita agendada: ' + (pacienteCita ? pacienteCita.nombre : 'paciente') + ' el ' + fechaHora(fecha, hora) + '.');
     encolarYSincronizar('notificarCita', {
       pacienteNombre: pacienteCita ? pacienteCita.nombre : 'Paciente',
       pacienteTelefono: pacienteCita ? pacienteCita.telefono : '',
@@ -1259,6 +1388,7 @@
     saveDB();
     encolarYSincronizar('guardarPaciente', paciente);
     setFichaEditable(false);
+    registrarAlerta('paciente', 'Ficha clínica guardada: ' + paciente.nombre + '.');
     alert('Ficha guardada.');
   });
 
@@ -1428,6 +1558,7 @@
     visitaEsperandoId = nuevaVisita.id;
     db.visitas.push(nuevaVisita);
     saveDB();
+    registrarAlerta('consulta', 'Consulta registrada: ' + paciente.nombre + (nuevaVisita.tratamiento ? ' — ' + nuevaVisita.tratamiento : '') + (abono > 0 ? ' (abono $' + abono.toFixed(2) + ')' : '') + '.');
     encolarYSincronizar('guardarVisita', {
       ...nuevaVisita,
       fotoAntesBase64: [...fotosAntesTemp],
@@ -1445,6 +1576,7 @@
       };
       db.citas.push(nuevaCita);
       saveDB();
+      registrarAlerta('cita', 'Próxima cita agendada: ' + paciente.nombre + ' el ' + fechaHora(proximaFecha, proximaHora) + '.');
       encolarYSincronizar('guardarCita', nuevaCita);
       encolarYSincronizar('notificarCita', {
         pacienteNombre: paciente.nombre, pacienteTelefono: paciente.telefono,
@@ -1616,6 +1748,7 @@
         p.archivado = false;
         saveDB();
         encolarYSincronizar('guardarPaciente', p);
+        registrarAlerta('restaurar', 'Se restauró al paciente ' + p.nombre + '.');
         renderPapelera();
       });
     });
@@ -1627,6 +1760,7 @@
     db.config.correoNotificaciones = correo;
     saveDB();
     encolarYSincronizar('guardarConfiguracion', { correoNotificaciones: correo });
+    registrarAlerta('ok', 'Correo de notificaciones guardado.');
     alert('Correo guardado.');
   });
 
@@ -1658,7 +1792,8 @@
     }
     const btn = document.getElementById('themeToggle');
     const esOscuroAhora = tema === 'dark' || (tema !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    btn.textContent = esOscuroAhora ? '☀️ Modo claro' : '🌙 Modo oscuro';
+    btn.textContent = esOscuroAhora ? '☀️' : '🌙';
+    btn.title = esOscuroAhora ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
   }
   function initTema(){
     const guardado = localStorage.getItem(THEME_KEY);
@@ -1952,6 +2087,7 @@
 
   // ---------- INIT ----------
   initTema();
+  pintarAlertas();
   buildAntecedentesInputs();
   buildExamenInputs();
   renderPacientes();
