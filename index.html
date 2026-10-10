@@ -371,7 +371,7 @@
 
     <div id="historiaContenido" class="hidden">
 
-      <div class="card">
+      <div class="card" style="display:none;">
         <h2 style="margin:0 0 4px;font-size:15px;">Resumen de lo realizado</h2>
         <p class="hint" style="margin:0;" id="resumenVisitasTexto"></p>
         <div class="resumen-pagos">
@@ -430,6 +430,7 @@
 
       <div class="card">
         <h2>Descripción de la consulta</h2>
+        <div style="display:none;">
         <div class="field-grid">
           <div class="field"><label>Fecha</label><input type="date" id="nv-fecha"></div>
           <div class="field"><label>Tratamiento realizado</label><input type="text" id="nv-tratamiento"></div>
@@ -444,6 +445,7 @@
             <label>Pendiente (automático)</label>
             <input type="text" id="nv-pendienteCalculado" disabled value="$0.00">
           </div>
+        </div>
         </div>
         <div class="field" style="margin-top:12px;max-width:260px;">
           <label>Foto del comprobante de depósito</label>
@@ -1259,6 +1261,24 @@
   });
 
   // El link del paciente asume que paciente.html está subido en la misma carpeta que este panel.
+
+  // ---------- PRÓXIMA VISITA y mensaje de WhatsApp ----------
+  function proximaCitaPaciente(pacienteId){
+    const hoy = new Date().toISOString().slice(0,10);
+    const futuras = (db.citas || []).filter(c => c.pacienteId === pacienteId && c.estado === 'pendiente' && String(c.fecha).slice(0,10) >= hoy)
+      .sort((a,b) => (String(a.fecha).slice(0,10) + ' ' + String(a.hora||'')).localeCompare(String(b.fecha).slice(0,10) + ' ' + String(b.hora||'')));
+    return futuras[0] || null;
+  }
+  function proximaVisitaDe(v, esUltima){
+    if(v.proximaFecha) return { fecha: v.proximaFecha, hora: v.proximaHora };
+    return esUltima ? proximaCitaPaciente(v.pacienteId) : null;
+  }
+  function textoWhatsAppPaciente(paciente, proxima){
+    let t = `Hola ${paciente ? paciente.nombre : ''}, aquí puedes ver el resumen de tu consulta, tu receta y tus pagos:\n\n${linkDelPaciente(paciente.id)}`;
+    if(proxima && proxima.fecha) t += `\n\nTu próxima visita es el ${fechaHora(proxima.fecha, proxima.hora)}.`;
+    return t;
+  }
+
   function linkDelPaciente(pacienteId){
     const base = window.location.href.replace(/[^/]*$/, '');
     return base + 'paciente.html?id=' + pacienteId;
@@ -1278,7 +1298,7 @@
     const paciente = db.pacientes.find(p => p.id === selectedPatientId);
     if(!paciente) return;
     const link = linkDelPaciente(selectedPatientId);
-    const texto = encodeURIComponent(`Hola ${paciente.nombre}, aquí puedes ver tu receta y tus pagos:\n\n${link}`);
+    const texto = encodeURIComponent(textoWhatsAppPaciente(paciente, proximaCitaPaciente(paciente.id)));
     window.open(`https://wa.me/${telefonoWhatsApp(paciente.telefono)}?text=${texto}`, '_blank');
   });
 
@@ -1518,6 +1538,8 @@
     if(!paciente) return;
 
     const fecha = document.getElementById('nv-fecha').value || new Date().toISOString().slice(0,10);
+    const proximaFechaVisita = document.getElementById('nv-proximaFecha').value;
+    const proximaHoraVisita = proximaFechaVisita ? (document.getElementById('nv-proximaHora').value || '09:00') : '';
     // Si el campo quedó vacío en una visita posterior, se conserva el valor ya acordado (ej. 500).
     // El cargo adicional (ej. muela del juicio $40) se suma al valor acordado (ej. $500 → $540).
     const cargoExtra = Number(document.getElementById('nv-cargoExtra').value || 0);
@@ -1526,16 +1548,6 @@
     const abono = Number(document.getElementById('nv-abono').value || 0);
     const previos = sumaAbonosPrevios(selectedPatientId);
     const pendiente = Math.max(valorTratamiento - (previos + abono), 0);
-
-    // Aviso antes de guardar un tratamiento sin valor (el paciente vería $0.00 en su comprobante).
-    if(valorTratamiento <= 0){
-      const notasTxt = document.getElementById('nv-notas').value.trim();
-      const soloNumero = /^\$?\s*\d+([.,]\d+)?$/.test(notasTxt);
-      const aviso = 'No escribiste el valor del tratamiento: el comprobante del paciente mostrará $0.00.' +
-        (soloNumero ? '\n\nEn Notas escribiste solo un número (' + notasTxt + '). Si era el valor, cancela y ponlo en "Valor del tratamiento".' : '') +
-        '\n\n¿Guardar la consulta así de todas formas?';
-      if(!confirm(aviso)) return;
-    }
 
     // El valor del tratamiento queda guardado en la ficha del paciente para la próxima sesión.
     paciente.valorTratamiento = valorTratamiento;
@@ -1547,6 +1559,7 @@
       hora: new Date().toTimeString().slice(0,5),
       tratamiento: document.getElementById('nv-tratamiento').value,
       valorTratamiento, cargoExtra, abono, pendiente,
+      proximaFecha: proximaFechaVisita, proximaHora: proximaHoraVisita,
       notas: document.getElementById('nv-notas').value,
       receta: document.getElementById('nv-receta').value,
       // Mientras se sincroniza, estos campos guardan las imágenes locales (base64) para la vista previa.
@@ -1600,8 +1613,7 @@
     renderVisitas();
     renderFidelizacion();
 
-    const link = linkDelPaciente(selectedPatientId);
-    const texto = encodeURIComponent(`Hola ${paciente.nombre}, aquí puedes ver el resumen de tu consulta, tu receta y tus pagos:\n\n${link}`);
+    const texto = encodeURIComponent(textoWhatsAppPaciente(paciente, proximaFechaVisita ? { fecha: proximaFechaVisita, hora: proximaHoraVisita } : proximaCitaPaciente(paciente.id)));
     document.getElementById('linkWhatsAppConsulta').href = `https://wa.me/${telefonoWhatsApp(paciente.telefono)}?text=${texto}`;
     mostrarEstadoGuardado(nuevaVisita.id, 'guardando');
     if(!backendConfigurado() || !navigator.onLine){
@@ -1625,7 +1637,8 @@
       const fotosDespues = Array.isArray(v.fotoDespuesUrl) ? v.fotoDespuesUrl : (v.fotoDespuesUrl ? [v.fotoDespuesUrl] : []);
       const tienePdf = v.pdfUrl && v.pdfUrl.startsWith('http');
       const tieneDepPdf = v.depositoPdfUrl && String(v.depositoPdfUrl).startsWith('http');
-      const waTexto = encodeURIComponent(`Hola ${paciente ? paciente.nombre : ''}, aquí puedes ver el resumen de tu consulta, tu receta y tus pagos:\n\n${linkDelPaciente(v.pacienteId)}`);
+      const proxima = proximaVisitaDe(v, visitas.indexOf(v) === 0);
+      const waTexto = encodeURIComponent(paciente ? textoWhatsAppPaciente(paciente, proxima) : '');
       const waHref = paciente && paciente.telefono ? `https://wa.me/${telefonoWhatsApp(paciente.telefono)}?text=${waTexto}` : '';
 
       const div = document.createElement('div');
@@ -1634,10 +1647,10 @@
       div.innerHTML = `
         <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
           <div>
-            <b>${fechaHora(v.fecha, v.hora)}</b> — ${v.tratamiento || 'Sin tratamiento especificado'}
+            <b>${fechaHora(v.fecha, v.hora)}</b>${v.tratamiento ? ' — ' + escHtml(v.tratamiento) : ''}
             <div class="visita-seccion"><div class="vs-bar">Notas</div><div class="vs-body">${v.notas || '—'}</div></div>
             ${v.receta ? `<div class="visita-seccion"><div class="vs-bar">Receta</div><div class="vs-body" style="white-space:pre-line;">${escHtml(v.receta)}</div></div>` : ''}
-            <div class="visita-seccion"><div class="vs-bar">Pagos</div><div class="vs-body">Valor tratamiento: $${(v.valorTratamiento||0).toFixed(2)}${cargo > 0 ? ` (incluye cargo adicional +$${cargo.toFixed(2)})` : ''} · Abono: $${(v.abono||0).toFixed(2)} · Pendiente: $${(v.pendiente||0).toFixed(2)}</div></div>
+            ${proxima ? `<div class="visita-seccion"><div class="vs-bar">Próxima visita</div><div class="vs-body" style="font-weight:600;">${fechaHora(proxima.fecha, proxima.hora)}</div></div>` : ''}
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
             <div style="display:flex;gap:6px;flex-wrap:wrap;max-width:200px;justify-content:flex-end;">
