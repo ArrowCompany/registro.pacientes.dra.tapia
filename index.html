@@ -634,6 +634,8 @@
       case 'guardarCita': return 'la cita de ' + (nombrePac(pl.pacienteId) || 'un paciente');
       case 'notificarCita': return 'el aviso de cita de ' + (pl.pacienteNombre || 'un paciente');
       case 'actualizarCitaEstado': return 'el estado de una cita';
+      case 'editarVisita': return 'los cambios de una consulta de ' + (nombrePac(pl.pacienteId) || 'un paciente');
+      case 'eliminarVisita': return 'la eliminación de una consulta';
       case 'guardarConfiguracion': return 'la configuración';
       default: return 'un cambio';
     }
@@ -805,7 +807,7 @@
   // Google Sheets devuelve las fechas como 2026-10-08T05:00:00.000Z; aquí se dejan como 2026-10-08.
   function normalizarFechas(base){
     const limpia = (f) => (typeof f === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(f)) ? f.slice(0,10) : f;
-    (base.visitas || []).forEach(v => { v.fecha = limpia(v.fecha); });
+    (base.visitas || []).forEach(v => { v.fecha = limpia(v.fecha); v.proximaFecha = limpia(v.proximaFecha || ''); });
     (base.citas || []).forEach(c => { c.fecha = limpia(c.fecha); });
     (base.pacientes || []).forEach(p => {
       p.fechaNacimiento = limpia(p.fechaNacimiento);
@@ -835,6 +837,13 @@
       fusionar('pacientes', 'guardarPaciente');
       fusionar('visitas', 'guardarVisita');
       fusionar('citas', 'guardarCita');
+      pendientes.filter(q => q.action === 'eliminarVisita' && q.payload).forEach(q => {
+        remotoDB.visitas = remotoDB.visitas.filter(x => x.id !== q.payload.id);
+      });
+      pendientes.filter(q => q.action === 'editarVisita' && q.payload).forEach(q => {
+        const rv = remotoDB.visitas.find(x => x.id === q.payload.id);
+        if(rv) Object.assign(rv, { notas: q.payload.notas, receta: q.payload.receta, proximaFecha: q.payload.proximaFecha, proximaHora: q.payload.proximaHora });
+      });
       normalizarFechas(remotoDB);
       db = remotoDB;
       db.pacientes.forEach(p => { const vv = valorVigente(p); if(vv > 0) p.valorTratamiento = vv; });
@@ -1652,24 +1661,28 @@
             ${v.receta ? `<div class="visita-seccion"><div class="vs-bar">Receta</div><div class="vs-body" style="white-space:pre-line;">${escHtml(v.receta)}</div></div>` : ''}
             ${proxima ? `<div class="visita-seccion"><div class="vs-bar">Próxima visita</div><div class="vs-body" style="font-weight:600;">${fechaHora(proxima.fecha, proxima.hora)}</div></div>` : ''}
           </div>
-          <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
-            <div style="display:flex;gap:6px;flex-wrap:wrap;max-width:200px;justify-content:flex-end;">
-              ${fotosAntes.map(url => `<img src="${url}" class="photo-preview photo-click" title="Antes — toca para ampliar" style="max-width:64px;" data-ampliar="${url}">`).join('')}
-              ${fotosDespues.map(url => `<img src="${url}" class="photo-preview photo-click" title="Después — toca para ampliar" style="max-width:64px;" data-ampliar="${url}">`).join('')}
-              ${v.depositoFotoUrl ? `<img src="${v.depositoFotoUrl}" class="photo-preview photo-click" title="Comprobante de depósito — toca para ampliar" style="max-width:64px;border-color:var(--teal);" data-ampliar="${v.depositoFotoUrl}">` : ''}
-            </div>
-            ${tienePdf ? `<a href="${v.pdfUrl}" target="_blank">Ver PDF guardado</a>` : ''}
-            ${tieneDepPdf ? `<a href="${v.depositoPdfUrl}" target="_blank">Ver PDF del depósito</a>` : ''}
-            ${waHref ? `<a href="${waHref}" target="_blank"><button>📲 Enviar por WhatsApp</button></a>` : ''}
-            <button data-pdf="${v.id}">Imprimir / PDF local</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;max-width:200px;justify-content:flex-end;align-content:flex-start;">
+            ${fotosAntes.map(url => `<img src="${url}" class="photo-preview photo-click" title="Antes — toca para ampliar" style="max-width:64px;" data-ampliar="${url}">`).join('')}
+            ${fotosDespues.map(url => `<img src="${url}" class="photo-preview photo-click" title="Después — toca para ampliar" style="max-width:64px;" data-ampliar="${url}">`).join('')}
+            ${v.depositoFotoUrl ? `<img src="${v.depositoFotoUrl}" class="photo-preview photo-click" title="Comprobante de depósito — toca para ampliar" style="max-width:64px;border-color:var(--teal);" data-ampliar="${v.depositoFotoUrl}">` : ''}
           </div>
+        </div>
+        <div style="border-top:1px solid var(--line, #e3e3e3);margin-top:12px;padding-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          ${tienePdf ? `<a href="${v.pdfUrl}" target="_blank"><button>📄 Ver PDF guardado</button></a>` : ''}
+          ${tieneDepPdf ? `<a href="${v.depositoPdfUrl}" target="_blank"><button>📄 PDF del depósito</button></a>` : ''}
+          ${waHref ? `<a href="${waHref}" target="_blank"><button>📲 Enviar por WhatsApp</button></a>` : ''}
+          <button data-editar="${v.id}">✏️ Editar</button>
+          <button class="danger" data-eliminar="${v.id}">🗑️ Eliminar</button>
         </div>
       `;
       lista.appendChild(div);
     });
 
-    lista.querySelectorAll('[data-pdf]').forEach(btn => {
-      btn.addEventListener('click', () => imprimirVisita(btn.dataset.pdf));
+    lista.querySelectorAll('[data-editar]').forEach(btn => {
+      btn.addEventListener('click', () => abrirEdicionVisita(btn.dataset.editar, btn.closest('.card')));
+    });
+    lista.querySelectorAll('[data-eliminar]').forEach(btn => {
+      btn.addEventListener('click', () => eliminarVisita(btn.dataset.eliminar));
     });
     lista.querySelectorAll('[data-ampliar]').forEach(img => {
       img.addEventListener('click', () => abrirLightbox(img.dataset.ampliar));
@@ -1683,6 +1696,89 @@
   function cerrarLightbox(){
     document.getElementById('lightboxOverlay').classList.remove('show');
     document.getElementById('lightboxImg').src = '';
+  }
+
+  // ---------- EDITAR / ELIMINAR VISITA ----------
+  function abrirEdicionVisita(visitaId, tarjeta){
+    const v = db.visitas.find(x => x.id === visitaId);
+    if(!v || !tarjeta) return;
+    const visitasPac = db.visitas.filter(x => x.pacienteId === v.pacienteId).sort((a,b) => String(b.fecha).localeCompare(String(a.fecha)));
+    const prox = proximaVisitaDe(v, visitasPac[0] && visitasPac[0].id === v.id) || { fecha: '', hora: '' };
+    tarjeta.innerHTML = `
+      <b>${fechaHora(v.fecha, v.hora)}</b> — editar visita
+      <div class="field-grid" style="margin-top:10px;">
+        <div class="field"><label>Notas</label><textarea id="ed-notas">${escHtml(v.notas || '')}</textarea></div>
+        <div class="field"><label>Receta</label><textarea id="ed-receta">${escHtml(v.receta || '')}</textarea></div>
+        <div class="field"><label>Próxima visita (fecha)</label><input type="date" id="ed-proxFecha" value="${String(prox.fecha || '').slice(0,10)}"></div>
+        <div class="field"><label>Hora</label><input type="time" id="ed-proxHora" value="${String(prox.hora || '').slice(0,5) || '09:00'}"></div>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="primary" id="ed-guardar">Guardar cambios</button>
+        <button id="ed-cancelar">Cancelar</button>
+      </div>`;
+    tarjeta.querySelector('#ed-cancelar').addEventListener('click', renderVisitas);
+    tarjeta.querySelector('#ed-guardar').addEventListener('click', () => guardarEdicionVisita(visitaId, prox));
+  }
+
+  function guardarEdicionVisita(visitaId, proxAnterior){
+    const v = db.visitas.find(x => x.id === visitaId);
+    if(!v) return;
+    const paciente = db.pacientes.find(p => p.id === v.pacienteId);
+    const notas = document.getElementById('ed-notas').value;
+    const receta = document.getElementById('ed-receta').value;
+    const nuevaFecha = document.getElementById('ed-proxFecha').value;
+    const nuevaHora = nuevaFecha ? (document.getElementById('ed-proxHora').value || '09:00') : '';
+    const fAnt = String(proxAnterior.fecha || '').slice(0,10);
+    const hAnt = String(proxAnterior.hora || '').slice(0,5);
+    const cambioProxima = (nuevaFecha !== fAnt) || (nuevaFecha && nuevaHora !== hAnt);
+
+    v.notas = notas; v.receta = receta; v.proximaFecha = nuevaFecha; v.proximaHora = nuevaHora;
+    saveDB();
+    encolarYSincronizar('editarVisita', { id: v.id, pacienteId: v.pacienteId, notas, receta, proximaFecha: nuevaFecha, proximaHora: nuevaHora });
+
+    if(cambioProxima){
+      const citaVieja = fAnt ? db.citas.find(c => c.pacienteId === v.pacienteId && c.estado === 'pendiente' &&
+        String(c.fecha).slice(0,10) === fAnt && String(c.hora || '').slice(0,5) === hAnt) : null;
+      if(!nuevaFecha){
+        if(citaVieja){
+          citaVieja.estado = 'cancelada'; saveDB();
+          encolarYSincronizar('actualizarCitaEstado', { id: citaVieja.id, estado: 'cancelada' });
+        }
+      }else{
+        let cita = citaVieja;
+        if(cita){ cita.fecha = nuevaFecha; cita.hora = nuevaHora; }
+        else{
+          cita = { id: uid('cita'), pacienteId: v.pacienteId, fecha: nuevaFecha, hora: nuevaHora,
+            motivo: 'Próxima visita' + (v.tratamiento ? ' — ' + v.tratamiento : ''), estado: 'pendiente' };
+          db.citas.push(cita);
+        }
+        saveDB();
+        // avisado2dias / avisado2horas vacíos: los recordatorios automáticos se vuelven a enviar para la nueva fecha
+        encolarYSincronizar('guardarCita', { ...cita, avisado2dias: '', avisado2horas: '' });
+        if(paciente){
+          encolarYSincronizar('notificarCita', {
+            pacienteNombre: paciente.nombre, pacienteTelefono: paciente.telefono,
+            fecha: nuevaFecha, hora: nuevaHora, motivo: cita.motivo
+          });
+        }
+        registrarAlerta('cita', 'Próxima cita actualizada: ' + (paciente ? paciente.nombre : 'paciente') + ' el ' + fechaHora(nuevaFecha, nuevaHora) + '.');
+      }
+    }
+    renderVisitas();
+  }
+
+  function eliminarVisita(visitaId){
+    const v = db.visitas.find(x => x.id === visitaId);
+    if(!v) return;
+    const paciente = db.pacientes.find(p => p.id === v.pacienteId);
+    if(!confirm('¿Eliminar esta visita' + (paciente ? ' de ' + paciente.nombre : '') + ' (' + fechaHora(v.fecha, v.hora) + ')?\n\nSe borrará del historial y no se puede deshacer.')) return;
+    db.visitas = db.visitas.filter(x => x.id !== visitaId);
+    saveDB();
+    encolarYSincronizar('eliminarVisita', { id: visitaId, pacienteId: v.pacienteId });
+    registrarAlerta('borrar', 'Visita eliminada: ' + (paciente ? paciente.nombre : 'paciente') + ' (' + fechaHora(v.fecha, v.hora) + ').');
+    if(paciente) actualizarResumenPagos(paciente);
+    renderVisitas();
+    renderFidelizacion();
   }
 
   function imprimirVisita(visitaId){
