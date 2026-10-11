@@ -185,23 +185,30 @@
   .patient-summary b{ color:var(--ink); }
 
   /* Odontograma */
-  .arch-label{ font-size:13px; font-weight:600; color:var(--ink-soft); margin:14px 0 8px; }
-  .arch-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:6px; }
-  .arch-row{ display:flex; gap:7px; width:max-content; }
-  .quadrant-gap{ width:1px; background:var(--line); margin:0 5px; align-self:stretch; }
-  .tooth-card{ display:flex; flex-direction:column; align-items:center; gap:3px; width:80px; flex:0 0 auto; }
-  .tooth-number{ font-size:11.5px; font-weight:600; color:var(--ink-soft); }
+  .odo-tools{ display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 8px; }
+  .odo-chip{ display:inline-flex; align-items:center; gap:6px; padding:7px 12px; border-radius:999px; border:1px solid var(--line); background:var(--surface); font-size:12.5px; font-weight:600; color:var(--ink); cursor:pointer; }
+  .odo-chip.active{ background:var(--teal); border-color:var(--teal); color:#fff; }
+  .odo-chip .odo-ico{ display:inline-flex; width:18px; height:18px; }
+  .odo-chip .odo-ico svg{ width:18px; height:18px; }
+  .odo-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; padding:6px 0 10px; }
+  .odo-grid{ min-width:880px; display:flex; flex-direction:column; gap:4px; }
+  .odo-row{ display:flex; align-items:flex-start; }
+  .odo-half{ flex:1 1 0; min-width:0; display:grid; grid-template-columns:repeat(8, minmax(0, 1fr)); gap:4px; }
+  .odo-mid{ flex:0 0 18px; align-self:stretch; position:relative; }
+  .odo-mid::after{ content:''; position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--line); }
+  .tooth-card{ display:flex; flex-direction:column; align-items:center; gap:1px; min-width:0; }
+  .tooth-number{ font-size:11.5px; font-weight:700; color:var(--ink-soft); line-height:1.2; }
   .tooth-card.has-marks .tooth-number{ color:var(--teal-dark); }
-  .tooth-svg{ width:80px; height:80px; touch-action:none; }
+  .tooth-svg{ width:100%; height:auto; aspect-ratio:1 / 1; display:block; touch-action:none; }
   .zone{ cursor:pointer; transition:fill 120ms ease; }
-  .zone:active{ opacity:0.85; }
-  .zone-label{ font-size:30px; font-weight:600; fill:var(--ink-soft); pointer-events:none; user-select:none; }
-  .zone-label.on-dark{ fill:#fff; }
+  .zone:active{ opacity:0.8; }
   .legend{ display:flex; gap:16px; flex-wrap:wrap; margin-top:14px; }
   .legend-item{ display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-soft); }
   .swatch{ width:13px; height:13px; border-radius:4px; border:1px solid var(--line); }
+  .swatch.dot{ border-radius:50%; }
   .swatch.caries{ background:var(--caries); border-color:var(--caries); }
   .swatch.tratado{ background:var(--tratado); border-color:var(--tratado); }
+  .swatch.deficiente{ background:var(--tratado); border:2px solid var(--caries); }
   .swatch.sano{ background:var(--sano); }
 
   /* Fidelizacion */
@@ -416,23 +423,22 @@
 
       <div class="card">
         <h2>Odontograma</h2>
-        <p class="hint">Toca cualquier zona con el dedo o el Apple Pencil. Cada toque cicla: sano → caries → tratado → sano.</p>
-        <div class="arch-label">Arcada superior</div>
-        <div class="arch-scroll"><div class="arch-row" id="archUpper"></div></div>
-        <div class="arch-label">Arcada inferior</div>
-        <div class="arch-scroll"><div class="arch-row" id="archLower"></div></div>
+        <p class="hint" id="odoAyuda"></p>
+        <div class="odo-tools" id="odoTools"></div>
+        <div class="odo-scroll"><div class="odo-grid" id="odoGrid"></div></div>
         <div class="legend">
-          <div class="legend-item"><span class="swatch sano"></span>Sano</div>
-          <div class="legend-item"><span class="swatch caries"></span>Caries activa</div>
-          <div class="legend-item"><span class="swatch tratado"></span>Tratado</div>
+          <div class="legend-item"><span class="swatch dot caries"></span>Caries</div>
+          <div class="legend-item"><span class="swatch dot tratado"></span>Restauración</div>
+          <div class="legend-item"><span class="swatch dot deficiente"></span>Restauración deficiente</div>
         </div>
+        <p class="hint" style="margin:8px 0 0;">En cada diente: arriba = vestibular · abajo = lingual/palatino · lados = mesial/distal · centro = oclusal/incisal.</p>
       </div>
 
       <div class="card">
-        <h2>Descripción de la consulta</h2>
+        <h2>Fecha de primera consulta</h2>
+        <div class="field" style="max-width:220px;margin-bottom:14px;"><input type="date" id="nv-fecha" aria-label="Fecha de primera consulta"></div>
         <div style="display:none;">
         <div class="field-grid">
-          <div class="field"><label>Fecha</label><input type="date" id="nv-fecha"></div>
           <div class="field"><label>Tratamiento realizado</label><input type="text" id="nv-tratamiento"></div>
         </div>
 
@@ -447,8 +453,11 @@
           </div>
         </div>
         </div>
-        <div class="field" style="margin-top:12px;max-width:260px;">
-          <label>Foto del comprobante de depósito</label>
+        <div class="field" style="margin-top:12px;">
+          <label>Presupuesto</label>
+          <textarea id="nv-presupuesto" placeholder="Escribe el presupuesto"></textarea>
+        </div>
+        <div style="display:none;">
           <input type="file" accept="image/*" id="nv-deposito">
           <img id="nv-depositoPreview" class="photo-preview hidden">
         </div>
@@ -489,12 +498,6 @@
         <h2>Historial de visitas</h2>
         <div id="listaVisitas"></div>
         <p class="empty-row hidden" id="visitasVacio">Aún no hay visitas registradas.</p>
-      </div>
-
-      <div class="card">
-        <h2>Fidelización</h2>
-        <p class="hint" id="fidelizacionTexto"></p>
-        <div class="loyalty-row" id="fidelizacionDots"></div>
       </div>
 
     </div>
@@ -842,7 +845,7 @@
       });
       pendientes.filter(q => q.action === 'editarVisita' && q.payload).forEach(q => {
         const rv = remotoDB.visitas.find(x => x.id === q.payload.id);
-        if(rv) Object.assign(rv, { notas: q.payload.notas, receta: q.payload.receta, proximaFecha: q.payload.proximaFecha, proximaHora: q.payload.proximaHora });
+        if(rv) Object.assign(rv, { presupuesto: q.payload.presupuesto, notas: q.payload.notas, receta: q.payload.receta, proximaFecha: q.payload.proximaFecha, proximaHora: q.payload.proximaHora });
       });
       normalizarFechas(remotoDB);
       db = remotoDB;
@@ -943,7 +946,7 @@
 
     listaFiltrada.forEach(p => {
       const tr = document.createElement('tr');
-      const waText = encodeURIComponent(`Hola ${p.nombre}, aquí está tu enlace para ver tu historial y tarjeta de fidelización: [pendiente de publicar la vista del paciente]`);
+      const waText = encodeURIComponent(textoWhatsAppPaciente(p, proximaCitaPaciente(p.id)));
       tr.innerHTML = `
         <td>${p.nombre || '—'}</td>
         <td>${p.edad || '—'}</td>
@@ -1137,95 +1140,192 @@
     renderAgenda();
   });
 
-  // ---------- ODONTOGRAMA (reutilizado del prototipo aprobado) ----------
-  const STATES = ['sano', 'caries', 'tratado'];
-  const COLORS = { sano: 'var(--sano)', caries: 'var(--caries)', tratado: 'var(--tratado)' };
-  const CODES_UPPER = ['18','17','16','15','14','13','12','11','GAP','21','22','23','24','25','26','27','28'];
-  const CODES_LOWER = ['48','47','46','45','44','43','42','41','GAP','31','32','33','34','35','36','37','38'];
-  const ZONE_KEYS = { posterior: ['V','M','O','D','L'], anterior: ['V','M','I','D','L'] };
-  const PERIPHERAL = {
-    V: { x: 80, y: 20, w: 80, h: 60 }, M: { x: 20, y: 80, w: 60, h: 80 },
-    D: { x: 160, y: 80, w: 60, h: 80 }, L: { x: 80, y: 160, w: 80, h: 60 }
-  };
+  // ---------- ODONTOGRAMA (símbolos del odontograma clínico) ----------
+  // Estados de cada superficie. 'tratado' era el nombre anterior de 'restauracion' (se convierte solo).
+  const ESTADOS = ['sano', 'caries', 'restauracion', 'deficiente'];
+  const ODO_KEYS = ['V', 'M', 'O', 'D', 'L'];
+
+  // Orden de las filas igual que en la ficha: permanentes, temporales, temporales, permanentes.
+  const ODO_FILAS = [
+    { izq: ['18','17','16','15','14','13','12','11'], der: ['21','22','23','24','25','26','27','28'], numero: 'arriba' },
+    { izq: ['55','54','53','52','51'], der: ['61','62','63','64','65'], numero: 'abajo' },
+    { izq: ['85','84','83','82','81'], der: ['71','72','73','74','75'], numero: 'arriba' },
+    { izq: ['48','47','46','45','44','43','42','41'], der: ['31','32','33','34','35','36','37','38'], numero: 'abajo' }
+  ];
+
+  // Herramientas: "superficies" cicla los sectores; las demás marcan el diente completo.
+  const ODO_MODOS = [
+    { id: 'superficies', texto: 'Superficies', ayuda: 'Toca una zona del diente: cada toque cicla sano → caries (rojo) → restauración (azul) → restauración deficiente → sano.',
+      icono: '<svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="5.5" fill="#D6472E"/><circle cx="16" cy="12" r="5.5" fill="#2659C7"/></svg>' },
+    { id: 'ausente', texto: 'Diente ausente', ayuda: 'Toca un diente para marcarlo como ausente (X azul). Vuelve a tocarlo para quitarlo.',
+      icono: '<svg viewBox="0 0 24 24"><path d="M4 4L20 20M20 4L4 20" stroke="#2659C7" stroke-width="4.5" stroke-linecap="round"/></svg>' },
+    { id: 'extraccion', texto: 'Extracción', ayuda: 'Toca un diente para indicar extracción (aspa roja). Vuelve a tocarlo para quitarla.',
+      icono: '<svg viewBox="0 0 24 24"><path d="M4 4L20 20M20 4L4 20" stroke="#D6472E" stroke-width="4.5" stroke-linecap="round"/></svg>' },
+    { id: 'fractura', texto: 'Fractura', ayuda: 'Toca un diente para marcar fractura dental. Vuelve a tocarlo para quitarla.',
+      icono: '<svg viewBox="0 0 100 100"><g stroke="#D6472E" stroke-linecap="round" fill="none"><path d="M52 22L80 50" stroke-width="16"/><path d="M66 36L30 72" stroke-width="7"/></g><path d="M34 62L20 82L38 76Z" fill="#D6472E"/></svg>' },
+    { id: 'erupcion', texto: 'En erupción', ayuda: 'Toca un diente para marcarlo en erupción (flecha azul). Vuelve a tocarlo para quitarla.',
+      icono: '<svg viewBox="0 0 24 24"><path d="M7 3L2.5 10H6V21H8V10H11.5Z" fill="#2659C7"/><path d="M17 21L12.5 14H16V3H18V14H21.5Z" fill="#2659C7"/></svg>' },
+    { id: 'movil', texto: 'Móvil', ayuda: 'Toca un diente para marcarlo como móvil (M roja). Vuelve a tocarlo para quitarla.',
+      icono: '<svg viewBox="0 0 24 24"><text x="12" y="19" text-anchor="middle" font-size="20" font-weight="800" fill="#D6472E" font-family="Arial,sans-serif">M</text></svg>' },
+    { id: 'presente', texto: 'Presente en boca', ayuda: 'Toca un diente para marcar que está presente en boca (raya azul). Vuelve a tocarlo para quitarla.',
+      icono: '<svg viewBox="0 0 24 24"><path d="M18 3L6 21" stroke="#2659C7" stroke-width="3.5" stroke-linecap="round"/></svg>' }
+  ];
+  let odoModo = 'superficies';
 
   function getToothType(code){
     const d = Number(String(code).slice(-1));
     return d >= 1 && d <= 3 ? 'anterior' : 'posterior';
   }
-  function freshToothState(type){
-    const s = {}; ZONE_KEYS[type].forEach(k => s[k] = 'sano'); return s;
+  function freshToothState(){
+    const s = { marcas: {}, _type: 'posterior' };
+    ODO_KEYS.forEach(k => s[k] = 'sano');
+    return s;
   }
+  // Devuelve el estado de un diente y lo deja siempre en el formato actual
+  // (así se siguen leyendo bien los datos guardados con el odontograma anterior).
   function ensureTooth(patientId, code){
+    if(!db.odontogramas) db.odontogramas = {};
     if(!db.odontogramas[patientId]) db.odontogramas[patientId] = {};
     const pObj = db.odontogramas[patientId];
-    const type = getToothType(code);
-    if(!pObj[code] || pObj[code]._type !== type){ pObj[code] = freshToothState(type); pObj[code]._type = type; }
-    return pObj[code];
+    if(!pObj[code]) pObj[code] = freshToothState();
+    const t = pObj[code];
+    if(t.I !== undefined && t.O === undefined) t.O = t.I; // antes el borde incisal se guardaba como "I"
+    delete t.I;
+    ODO_KEYS.forEach(k => {
+      if(t[k] === 'tratado') t[k] = 'restauracion';
+      if(ESTADOS.indexOf(t[k]) === -1) t[k] = 'sano';
+    });
+    if(!t.marcas || typeof t.marcas !== 'object') t.marcas = {};
+    t._type = getToothType(code);
+    return t;
   }
-  function buildSvgMarkup(type){
-    const corners = [[20,20],[160,20],[20,160],[160,160]]
-      .map(([x,y]) => `<rect x="${x}" y="${y}" width="60" height="60" rx="6" fill="transparent"></rect>`).join('');
-    const peripheral = Object.entries(PERIPHERAL).map(([key, r]) => `
-      <rect class="zone" data-zone="${key}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="8" fill="var(--sano)" stroke="var(--line)"></rect>
-      <text class="zone-label" data-label="${key}" x="${r.x + r.w/2}" y="${r.y + r.h/2}" text-anchor="middle" dominant-baseline="central">${key === 'L' ? 'L/P' : key}</text>
-    `).join('');
-    let center = '';
-    if(type === 'posterior'){
-      center = `<rect class="zone" data-zone="O" x="80" y="80" width="80" height="80" rx="8" fill="var(--sano)" stroke="var(--line)"></rect>
-        <text class="zone-label" data-label="O" x="120" y="120" text-anchor="middle" dominant-baseline="central">O</text>`;
-    } else {
-      center = `<rect x="80" y="80" width="80" height="80" rx="8" fill="none" stroke="var(--line)" stroke-dasharray="4 4"></rect>
-        <rect class="zone" data-zone="I" x="80" y="80" width="80" height="26" rx="6" fill="var(--sano)" stroke="var(--line)"></rect>
-        <text class="zone-label" data-label="I" x="120" y="93" text-anchor="middle" dominant-baseline="central" style="font-size:16px">I</text>`;
+
+  // ----- Dibujo del diente: anillo de 4 sectores + círculo central -----
+  const ODO_C = 50, ODO_R = 38, ODO_r = 17;
+  const ODO_SECTORES = { V: [-135, -45], D: [-45, 45], L: [45, 135], M: [135, 225] };
+  function odoPunto(radio, grados){
+    const a = grados * Math.PI / 180;
+    return [(ODO_C + radio * Math.cos(a)).toFixed(2), (ODO_C + radio * Math.sin(a)).toFixed(2)];
+  }
+  function odoSector(a1, a2){
+    const [x1, y1] = odoPunto(ODO_R, a1), [x2, y2] = odoPunto(ODO_R, a2);
+    const [x3, y3] = odoPunto(ODO_r, a2), [x4, y4] = odoPunto(ODO_r, a1);
+    return `M${x1} ${y1}A${ODO_R} ${ODO_R} 0 0 1 ${x2} ${y2}L${x3} ${y3}A${ODO_r} ${ODO_r} 0 0 0 ${x4} ${y4}Z`;
+  }
+  function odoEstilo(estado){
+    switch(estado){
+      case 'caries': return 'fill:var(--caries);stroke:var(--ink);stroke-width:1.3';
+      case 'restauracion': return 'fill:var(--tratado);stroke:var(--ink);stroke-width:1.3';
+      case 'deficiente': return 'fill:var(--tratado);stroke:var(--caries);stroke-width:3.6';
+      default: return 'fill:var(--surface);stroke:var(--ink);stroke-width:1.3';
     }
-    return corners + peripheral + center;
+  }
+  function odoEsSuperior(code){ return ['1', '2', '5', '6'].indexOf(String(code).charAt(0)) !== -1; }
+
+  function odoSvgMarkup(code, t){
+    const zonas = [
+      ['V', `<path class="zone" data-zone="V" d="${odoSector(...ODO_SECTORES.V)}"`],
+      ['D', `<path class="zone" data-zone="D" d="${odoSector(...ODO_SECTORES.D)}"`],
+      ['L', `<path class="zone" data-zone="L" d="${odoSector(...ODO_SECTORES.L)}"`],
+      ['M', `<path class="zone" data-zone="M" d="${odoSector(...ODO_SECTORES.M)}"`],
+      ['O', `<circle class="zone" data-zone="O" cx="${ODO_C}" cy="${ODO_C}" r="${ODO_r}"`]
+    ];
+    // la restauración deficiente se dibuja al final para que su borde rojo quede por encima
+    zonas.sort((a, b) => (t[a[0]] === 'deficiente') - (t[b[0]] === 'deficiente'));
+    let svg = zonas.map(([k, ini]) => `${ini} style="${odoEstilo(t[k])}"/>`).join('');
+
+    const m = t.marcas || {};
+    let extra = '';
+    if(m.ausente) extra += '<path d="M24 24L76 76M76 24L24 76" stroke="var(--tratado)" stroke-width="9" stroke-linecap="round" fill="none"/>';
+    if(m.extraccion) extra += '<path d="M24 24L76 76M76 24L24 76" stroke="var(--caries)" stroke-width="9" stroke-linecap="round" fill="none"/>';
+    if(m.fractura) extra += '<g stroke="var(--caries)" stroke-linecap="round" fill="none"><path d="M54 26L76 48" stroke-width="12"/><path d="M65 37L36 66" stroke-width="5"/></g><path d="M39 60L27 77L43 72Z" fill="var(--caries)"/>';
+    if(m.erupcion){
+      extra += odoEsSuperior(code)
+        ? '<path d="M50 19L37 7L45.5 7L45.5 0L54.5 0L54.5 7L63 7Z" fill="var(--tratado)"/>'
+        : '<path d="M50 81L37 93L45.5 93L45.5 100L54.5 100L54.5 93L63 93Z" fill="var(--tratado)"/>';
+    }
+    if(m.movil) extra += '<text x="1" y="19" font-size="21" font-weight="800" fill="var(--caries)" font-family="Arial, sans-serif">M</text>';
+    if(m.presente) extra += '<path d="M85 17L96 3" stroke="var(--tratado)" stroke-width="5" stroke-linecap="round" fill="none"/>';
+    if(extra) svg += `<g style="pointer-events:none">${extra}</g>`;
+    return svg;
+  }
+
+  function odoTieneMarcas(t){
+    return ODO_KEYS.some(k => t[k] !== 'sano') || Object.keys(t.marcas || {}).length > 0;
   }
   function renderToothSvg(patientId, code, svgEl, cardEl){
-    const type = getToothType(code);
-    const state = ensureTooth(patientId, code);
-    svgEl.innerHTML = buildSvgMarkup(type);
-    let hasMarks = false;
-    ZONE_KEYS[type].forEach(key => {
-      const zoneEl = svgEl.querySelector(`[data-zone="${key}"]`);
-      const labelEl = svgEl.querySelector(`[data-label="${key}"]`);
-      zoneEl.setAttribute('fill', COLORS[state[key]]);
-      labelEl.classList.toggle('on-dark', state[key] !== 'sano');
-      if(state[key] !== 'sano') hasMarks = true;
-      zoneEl.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        const idx = STATES.indexOf(state[key]);
-        state[key] = STATES[(idx + 1) % STATES.length];
-        saveDB();
-        const superficies = { ...state };
-        delete superficies._type;
-        encolarYSincronizar('guardarOdontograma', { pacienteId: patientId, diente: code, tipo: type, superficies });
-        renderToothSvg(patientId, code, svgEl, cardEl);
-      });
-    });
-    cardEl.classList.toggle('has-marks', hasMarks);
+    const t = ensureTooth(patientId, code);
+    svgEl.innerHTML = odoSvgMarkup(code, t);
+    cardEl.classList.toggle('has-marks', odoTieneMarcas(t));
   }
-  function buildToothCard(patientId, code){
+  function odoGuardarDiente(patientId, code, t){
+    saveDB();
+    const superficies = { V: t.V, M: t.M, O: t.O, D: t.D, L: t.L, marcas: { ...t.marcas } };
+    encolarYSincronizar('guardarOdontograma', { pacienteId: patientId, diente: code, tipo: t._type, superficies });
+  }
+
+  function buildToothCard(patientId, code, posNumero){
     const card = document.createElement('div'); card.className = 'tooth-card';
     const number = document.createElement('span'); number.className = 'tooth-number'; number.textContent = code;
     const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svgEl.setAttribute('viewBox', '0 0 240 240'); svgEl.setAttribute('class', 'tooth-svg');
-    card.appendChild(number); card.appendChild(svgEl);
-    ensureTooth(patientId, code);
+    svgEl.setAttribute('viewBox', '0 0 100 100'); svgEl.setAttribute('class', 'tooth-svg');
+    svgEl.setAttribute('role', 'img'); svgEl.setAttribute('aria-label', 'Diente ' + code);
+    if(posNumero === 'arriba'){ card.appendChild(number); card.appendChild(svgEl); }
+    else { card.appendChild(svgEl); card.appendChild(number); }
+
+    // Un solo manejador por diente: sirve para dedo y para Apple Pencil.
+    svgEl.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const t = ensureTooth(patientId, code);
+      if(odoModo === 'superficies'){
+        const zona = e.target.closest ? e.target.closest('[data-zone]') : null;
+        if(!zona) return;
+        const k = zona.getAttribute('data-zone');
+        t[k] = ESTADOS[(ESTADOS.indexOf(t[k]) + 1) % ESTADOS.length];
+      } else {
+        if(t.marcas[odoModo]) delete t.marcas[odoModo]; else t.marcas[odoModo] = true;
+      }
+      odoGuardarDiente(patientId, code, t);
+      renderToothSvg(patientId, code, svgEl, card);
+    });
+
     renderToothSvg(patientId, code, svgEl, card);
     return card;
   }
+
+  function odoPintarHerramientas(){
+    const cont = document.getElementById('odoTools');
+    if(!cont) return;
+    cont.innerHTML = ODO_MODOS.map(m =>
+      `<button type="button" class="odo-chip${m.id === odoModo ? ' active' : ''}" data-modo="${m.id}"><span class="odo-ico">${m.icono}</span>${m.texto}</button>`
+    ).join('');
+    cont.querySelectorAll('[data-modo]').forEach(b => b.addEventListener('click', () => {
+      odoModo = b.getAttribute('data-modo');
+      odoPintarHerramientas();
+    }));
+    const ayuda = document.getElementById('odoAyuda');
+    const modo = ODO_MODOS.find(m => m.id === odoModo);
+    if(ayuda && modo) ayuda.textContent = modo.ayuda;
+  }
+
   function renderOdontograma(patientId){
-    const upper = document.getElementById('archUpper');
-    const lower = document.getElementById('archLower');
-    upper.innerHTML = ''; lower.innerHTML = '';
-    CODES_UPPER.forEach(code => {
-      if(code === 'GAP'){ const g = document.createElement('div'); g.className='quadrant-gap'; upper.appendChild(g); return; }
-      upper.appendChild(buildToothCard(patientId, code));
+    const grid = document.getElementById('odoGrid');
+    grid.innerHTML = '';
+    ODO_FILAS.forEach(fila => {
+      const row = document.createElement('div'); row.className = 'odo-row';
+      const izq = document.createElement('div'); izq.className = 'odo-half';
+      const mid = document.createElement('div'); mid.className = 'odo-mid';
+      const der = document.createElement('div'); der.className = 'odo-half';
+      fila.izq.forEach((code, i) => {
+        const card = buildToothCard(patientId, code, fila.numero);
+        if(i === 0) card.style.gridColumnStart = String(8 - fila.izq.length + 1); // los temporales quedan pegados al centro
+        izq.appendChild(card);
+      });
+      fila.der.forEach(code => der.appendChild(buildToothCard(patientId, code, fila.numero)));
+      row.appendChild(izq); row.appendChild(mid); row.appendChild(der);
+      grid.appendChild(row);
     });
-    CODES_LOWER.forEach(code => {
-      if(code === 'GAP'){ const g = document.createElement('div'); g.className='quadrant-gap'; lower.appendChild(g); return; }
-      lower.appendChild(buildToothCard(patientId, code));
-    });
+    odoPintarHerramientas();
   }
 
   // ---------- HISTORIA CLINICA ----------
@@ -1283,7 +1383,7 @@
     return esUltima ? proximaCitaPaciente(v.pacienteId) : null;
   }
   function textoWhatsAppPaciente(paciente, proxima){
-    let t = `Hola ${paciente ? paciente.nombre : ''}, aquí puedes ver el resumen de tu consulta, tu receta y tus pagos:\n\n${linkDelPaciente(paciente.id)}`;
+    let t = `Hola ${paciente ? paciente.nombre : ''}, aquí puedes ver tu historial, tus visitas y tu receta:\n\n${linkDelPaciente(paciente.id)}`;
     if(proxima && proxima.fecha) t += `\n\nTu próxima visita es el ${fechaHora(proxima.fecha, proxima.hora)}.`;
     return t;
   }
@@ -1569,6 +1669,7 @@
       tratamiento: document.getElementById('nv-tratamiento').value,
       valorTratamiento, cargoExtra, abono, pendiente,
       proximaFecha: proximaFechaVisita, proximaHora: proximaHoraVisita,
+      presupuesto: document.getElementById('nv-presupuesto').value,
       notas: document.getElementById('nv-notas').value,
       receta: document.getElementById('nv-receta').value,
       // Mientras se sincroniza, estos campos guardan las imágenes locales (base64) para la vista previa.
@@ -1606,7 +1707,7 @@
       });
     }
 
-    ['nv-tratamiento','nv-notas','nv-receta','nv-proximaFecha'].forEach(id => document.getElementById(id).value = '');
+    ['nv-tratamiento','nv-notas','nv-receta','nv-presupuesto','nv-proximaFecha'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('nv-fecha').value = new Date().toISOString().slice(0,10);
     document.getElementById('nv-abono').value = 0;
     document.getElementById('nv-cargoExtra').value = 0;
@@ -1657,6 +1758,7 @@
         <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
           <div>
             <b>${fechaHora(v.fecha, v.hora)}</b>${v.tratamiento ? ' — ' + escHtml(v.tratamiento) : ''}
+            ${v.presupuesto ? `<div class="visita-seccion"><div class="vs-bar">Presupuesto</div><div class="vs-body" style="white-space:pre-line;font-weight:600;">${escHtml(v.presupuesto)}</div></div>` : ''}
             <div class="visita-seccion"><div class="vs-bar">Notas</div><div class="vs-body">${v.notas || '—'}</div></div>
             ${v.receta ? `<div class="visita-seccion"><div class="vs-bar">Receta</div><div class="vs-body" style="white-space:pre-line;">${escHtml(v.receta)}</div></div>` : ''}
             ${proxima ? `<div class="visita-seccion"><div class="vs-bar">Próxima visita</div><div class="vs-body" style="font-weight:600;">${fechaHora(proxima.fecha, proxima.hora)}</div></div>` : ''}
@@ -1707,6 +1809,7 @@
     tarjeta.innerHTML = `
       <b>${fechaHora(v.fecha, v.hora)}</b> — editar visita
       <div class="field-grid" style="margin-top:10px;">
+        <div class="field"><label>Presupuesto</label><textarea id="ed-presupuesto">${escHtml(v.presupuesto || '')}</textarea></div>
         <div class="field"><label>Notas</label><textarea id="ed-notas">${escHtml(v.notas || '')}</textarea></div>
         <div class="field"><label>Receta</label><textarea id="ed-receta">${escHtml(v.receta || '')}</textarea></div>
         <div class="field"><label>Próxima visita (fecha)</label><input type="date" id="ed-proxFecha" value="${String(prox.fecha || '').slice(0,10)}"></div>
@@ -1724,6 +1827,7 @@
     const v = db.visitas.find(x => x.id === visitaId);
     if(!v) return;
     const paciente = db.pacientes.find(p => p.id === v.pacienteId);
+    const presupuesto = document.getElementById('ed-presupuesto').value;
     const notas = document.getElementById('ed-notas').value;
     const receta = document.getElementById('ed-receta').value;
     const nuevaFecha = document.getElementById('ed-proxFecha').value;
@@ -1732,9 +1836,9 @@
     const hAnt = String(proxAnterior.hora || '').slice(0,5);
     const cambioProxima = (nuevaFecha !== fAnt) || (nuevaFecha && nuevaHora !== hAnt);
 
-    v.notas = notas; v.receta = receta; v.proximaFecha = nuevaFecha; v.proximaHora = nuevaHora;
+    v.presupuesto = presupuesto; v.notas = notas; v.receta = receta; v.proximaFecha = nuevaFecha; v.proximaHora = nuevaHora;
     saveDB();
-    encolarYSincronizar('editarVisita', { id: v.id, pacienteId: v.pacienteId, notas, receta, proximaFecha: nuevaFecha, proximaHora: nuevaHora });
+    encolarYSincronizar('editarVisita', { id: v.id, pacienteId: v.pacienteId, presupuesto, notas, receta, proximaFecha: nuevaFecha, proximaHora: nuevaHora });
 
     if(cambioProxima){
       const citaVieja = fAnt ? db.citas.find(c => c.pacienteId === v.pacienteId && c.estado === 'pendiente' &&
@@ -1814,6 +1918,7 @@
   // ---------- FIDELIZACION ----------
   const VISITAS_POR_BENEFICIO = 5;
   function renderFidelizacion(){
+    if(!document.getElementById('fidelizacionTexto')) return; // la sección de fidelización ya no existe
     const visitas = db.visitas.filter(v => v.pacienteId === selectedPatientId).length;
     const enCiclo = visitas % VISITAS_POR_BENEFICIO;
     const faltan = enCiclo === 0 && visitas > 0 ? 0 : VISITAS_POR_BENEFICIO - enCiclo;

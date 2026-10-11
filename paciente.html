@@ -99,7 +99,7 @@
   .lb.show{ display:flex; } .lb img{ max-width:96vw; max-height:92vh; border-radius:8px; }
   @media print{
     body{ background:#fff !important; color:#000 !important; }
-    body.print-receta .top-bar, body.print-receta .tabs, body.print-receta .no-print, body.print-receta #panelComprobante{ display:none !important; }
+    body.print-receta .top-bar, body.print-receta .tabs, body.print-receta .no-print, body.print-receta #panelHistorial, body.print-receta #panelVisitas{ display:none !important; }
     body.print-receta #panelReceta{ display:block !important; }
     body.print-receta .receta-doc, body.print-receta .doc-head, body.print-receta .sec-bar{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .receta-doc{ border-color:#000 !important; background:#fff !important; color:#000 !important; }
@@ -122,6 +122,15 @@
     const n = parseFloat(String(x == null ? '' : x).replace(/[^0-9.\-]/g, ''));
     return isFinite(n) ? n : 0;
   }
+
+  function horaBonita(h){
+    const m = String(h || '').match(/^(\d{1,2}):(\d{2})/);
+    if(!m) return '';
+    let hh = Number(m[1]); const suf = hh >= 12 ? 'pm' : 'am';
+    hh = hh % 12 || 12;
+    return hh + ':' + m[2] + ' ' + suf;
+  }
+  function fechaHoraBonita(f, h){ return formatearFechaBonita(f) + (horaBonita(h) ? ' ' + horaBonita(h) : ''); }
 
   function formatearFechaBonita(fechaISO){
     const partes = String(fechaISO || '').slice(0,10).split('-');
@@ -447,7 +456,7 @@
             <div class="receta-linea"></div>
             <div class="receta-campo"><b>Paciente:</b> ${esc(data.paciente.nombre)}</div>
             <div class="receta-campo"><b>Fecha:</b> ${formatearFechaBonita(rr.fecha)}</div>
-            <div class="receta-campo"><b>Tratamiento:</b> ${esc(rr.tratamiento) || '—'}</div>
+            ${rr.tratamiento ? `<div class="receta-campo"><b>Tratamiento:</b> ${esc(rr.tratamiento)}</div>` : ''}
             ${meds.length ? `<div class="rp">Rp.</div><ul class="med-list">${meds.map(m => `<li>${esc(m)}</li>`).join('')}</ul>` : '<p class="hint" style="margin-top:14px;">No se registraron medicamentos en esta receta.</p>'}
           </div>`;
     const parseMeds = (t) => String(t || '').split('\n').map(l => l.trim().replace(/^[*•\-–]\s*/, '')).filter(Boolean);
@@ -457,42 +466,40 @@
           <button class="receta-ant-btn no-print" data-ant="${k}"><span>Receta anterior ${formatearFechaBonita(ra.fecha)}</span><span class="flecha">▾</span></button>
           <div class="receta-ant-cuerpo no-print" id="recetaAnt${k}">${htmlReceta(ra, parseMeds(ra.receta))}</div>`).join('')}` : '';
 
-    // Resumen de pagos calculado aquí mismo, con los abonos reales de cada sesión
-    // El total vigente es el de la visita más reciente que tenga valor (ya incluye cargos adicionales como una extracción).
-    const ultimaConValor = visitasRecientes.find(x => num(x.valorTratamiento) > 0);
-    const valor = ultimaConValor
-      ? num(ultimaConValor.valorTratamiento)
-      : (num(data.paciente && data.paciente.valorTratamiento) || num(data.resumen && data.resumen.valorTratamiento));
-    const cargos = visitas.map((v, i) => pdfCargoExtra(visitas, i));
-    const totalExtras = cargos.reduce((s, c) => s + c, 0);
-    const totalAbonado = visitas.length ? visitas.reduce((s,v) => s + num(v.abono), 0) : num(data.resumen && data.resumen.totalAbonado);
-    const pendiente = Math.max(valor - totalAbonado, 0);
-
-    const filasPagos = visitas.map((v, i) => {
-      const tieneDep = pdfListaUrls(v.depositoFotoUrl).length > 0 || /^https?:/.test(String(v.depositoPdfUrl || ''));
-      return `<tr><td>${formatearFechaBonita(v.fecha)}</td><td>${esc(v.tratamiento) || '—'}${cargos[i] > 0 ? `<div class="hint" style="margin:2px 0 0;font-size:11px;">Cargo adicional +${money(cargos[i])}</div>` : ''}</td><td>${money(v.abono)}</td>
-        <td>${tieneDep ? `<button class="btn-teal" data-dep="${i}">Ver pdf</button>` : '—'}</td></tr>`;
-    }).join('');
-
-    const bloquesVisitas = visitasRecientes.map((v, i) => {
+    // ---------- HISTORIAL: presupuesto y fotos de antes y después ----------
+    const tieneDepositoDe = (v) => pdfListaUrls(v.depositoFotoUrl).length > 0 || /^https?:/.test(String(v.depositoPdfUrl || ''));
+    const bloquesHistorial = visitasRecientes.map(v => {
       const idx = visitas.indexOf(v);
       const hayFotos = pdfListaUrls(v.fotoAntesUrl).length + pdfListaUrls(v.fotoDespuesUrl).length > 0;
+      const presupuesto = String(v.presupuesto || '').trim();
+      const tieneDep = tieneDepositoDe(v);
+      if(!hayFotos && !presupuesto && !tieneDep) return '';
       return `
         <div class="card">
-          <div class="sec" style="margin-top:0;"><div class="sec-bar">Sesión del ${formatearFechaBonita(v.fecha)} — Trabajo realizado</div>
+          <div class="sec" style="margin-top:0;"><div class="sec-bar">Sesión del ${formatearFechaBonita(v.fecha)}</div>
             <div class="sec-body">
-              <div class="fila"><span class="lbl">Tratamiento:</span><span>${esc(v.tratamiento) || '—'}</span></div>
-              ${v.notas ? `<div class="fila"><span class="lbl">Notas:</span><span>${esc(v.notas)}</span></div>` : ''}
-              ${cargos[idx] > 0 ? `<div class="fila"><span class="lbl">Cargo adicional:</span><span><b>+${money(cargos[idx])}</b></span></div>` : ''}
-              <div class="fila"><span class="lbl">Abono de la sesión:</span><span><b>${money(v.abono)}</b></span></div>
+              ${presupuesto ? `<div class="fila"><span class="lbl">Presupuesto:</span><span style="white-space:pre-line;"><b>${esc(presupuesto)}</b></span></div>` : ''}
+              ${hayFotos ? `<div class="fila"><span class="lbl">Antes y después:</span><span><button class="btn-teal" data-fotos="${idx}">Ver pdf</button></span></div>` : ''}
+              ${tieneDep ? `<div class="fila"><span class="lbl">Comprobante de depósito:</span><span><button class="btn-teal" data-dep="${idx}">Ver pdf</button></span></div>` : ''}
             </div></div>
-          ${hayFotos ? `<div class="sec"><div class="sec-bar con-btn"><span>Fotos del antes y después</span><button class="btn-teal" data-fotos="${idx}">Ver pdf</button></div></div>` : ''}
         </div>`;
     }).join('');
 
-    const enCiclo = visitas.length % 5;
-    const posicionActual = enCiclo === 0 ? (visitas.length > 0 ? 5 : 0) : enCiclo;
-    const dots = Array.from({length:5}, (_, i) => `<div class="dot ${i < posicionActual ? 'filled' : ''}">${i === 4 ? '★' : i+1}</div>`).join('');
+    // ---------- MIS VISITAS: pendientes (próximas) y realizadas ----------
+    const hoyISO = new Date().toISOString().slice(0,10);
+    const proximas = [];
+    (data.citasPendientes || []).forEach(c => { if(c && c.fecha) proximas.push({ fecha: String(c.fecha).slice(0,10), hora: c.hora || '' }); });
+    visitas.forEach(v => {
+      const f = String(v.proximaFecha || '').slice(0,10);
+      if(f && f >= hoyISO && !proximas.some(p => p.fecha === f && String(p.hora || '').slice(0,5) === String(v.proximaHora || '').slice(0,5))){
+        proximas.push({ fecha: f, hora: v.proximaHora || '' });
+      }
+    });
+    proximas.sort((a,b) => (a.fecha + ' ' + a.hora).localeCompare(b.fecha + ' ' + b.hora));
+    const badge = (txt, tipo) => `<span style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:${tipo === 'pend' ? '#FBEBD2' : 'var(--cream)'};color:${tipo === 'pend' ? '#8a5a00' : 'var(--ink-soft)'};">${txt}</span>`;
+    const filaVisita = (fechaTxt, tipo) => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);"><span style="font-size:15px;">${fechaTxt}</span>${badge(tipo === 'pend' ? 'Pendiente' : 'Realizada', tipo)}</div>`;
+    const htmlProximas = proximas.length ? proximas.map(p => filaVisita(fechaHoraBonita(p.fecha, p.hora), 'pend')).join('') : '<p class="hint" style="margin:6px 0 0;">No tienes visitas pendientes.</p>';
+    const htmlRealizadas = visitasRecientes.length ? visitasRecientes.map(v => filaVisita(formatearFechaBonita(v.fecha), 'ok')).join('') : '<p class="hint" style="margin:6px 0 0;">Aún no hay visitas realizadas.</p>';
 
     app.innerHTML = `
       <div class="top-bar">
@@ -501,11 +508,23 @@
       </div>
 
       <div class="tabs">
-        <div class="tab active" id="tabReceta">💊 Receta</div>
-        <div class="tab" id="tabComprobante">🧾 Comprobante de pago</div>
+        <div class="tab active" id="tabHistorial">Historial</div>
+        <div class="tab" id="tabVisitas">Mis visitas</div>
+        <div class="tab" id="tabReceta">Receta</div>
       </div>
 
-      <div class="panel active" id="panelReceta">
+      <div class="panel active" id="panelHistorial">
+        ${bloquesHistorial || '<p class="hint">Aún no hay información en tu historial.</p>'}
+      </div>
+
+      <div class="panel" id="panelVisitas">
+        <div class="card">
+          <div class="sec" style="margin-top:0;"><div class="sec-bar">Próximas</div><div class="sec-body">${htmlProximas}</div></div>
+          <div class="sec"><div class="sec-bar">Realizadas</div><div class="sec-body">${htmlRealizadas}</div></div>
+        </div>
+      </div>
+
+      <div class="panel" id="panelReceta">
         ${r ? `
           <span class="receta-tag no-print">Receta actual ${formatearFechaBonita(r.fecha)}</span>
           ${htmlReceta(r, medicamentos)}
@@ -514,39 +533,12 @@
         ` : '<p class="hint">Aún no hay ninguna receta registrada.</p>'}
       </div>
 
-      <div class="panel" id="panelComprobante">
-        <div class="card" style="padding:0;overflow:hidden;">
-          <div class="doc-head"><img src="${LOGO}" alt=""><div><h2>Comprobante de pago</h2><p>${esc(data.paciente.nombre)}</p></div></div>
-          <div style="padding:6px 18px 18px;">
-            <div class="sec"><div class="sec-bar">Resumen de pagos</div>
-              <div class="resumen-pagos">
-                <div class="resumen-item"><div class="monto">${money(valor)}</div><div class="etiqueta">Valor del tratamiento</div></div>
-                <div class="resumen-item"><div class="monto">${money(totalAbonado)}</div><div class="etiqueta">Abonado</div></div>
-                <div class="resumen-item pendiente"><div class="monto">${money(pendiente)}</div><div class="etiqueta">Pendiente</div></div>
-              </div>
-              ${totalExtras > 0 ? `<p class="hint" style="margin:8px 0 0;">El valor incluye ${money(totalExtras)} en procedimientos adicionales.</p>` : ''}
-            </div>
-            <div class="sec"><div class="sec-bar">Historial de abonos</div>
-              ${filasPagos ? `<table><thead><tr><th>Fecha</th><th>Tratamiento</th><th>Abono</th><th>Comprobante</th></tr></thead><tbody>${filasPagos}</tbody></table>` : '<p class="hint">Aún no hay sesiones registradas.</p>'}
-            </div>
-          </div>
-        </div>
-
-        ${bloquesVisitas}
-
-        ${visitas.length ? `
-          <div class="card">
-            <div class="sec" style="margin-top:0;"><div class="sec-bar">Fidelización</div>
-              <div class="sec-body"><p class="hint" style="margin-top:0;">${visitas.length} visita(s) registradas.</p><div class="loyalty-row">${dots}</div></div>
-            </div>
-          </div>` : ''}
-      </div>
-
       <div class="lb" id="lb"><img alt="Foto ampliada"></div>
     `;
 
+    document.getElementById('tabHistorial').addEventListener('click', () => cambiarTab('Historial'));
+    document.getElementById('tabVisitas').addEventListener('click', () => cambiarTab('Visitas'));
     document.getElementById('tabReceta').addEventListener('click', () => cambiarTab('Receta'));
-    document.getElementById('tabComprobante').addEventListener('click', () => cambiarTab('Comprobante'));
     document.getElementById('lb').addEventListener('click', e => e.currentTarget.classList.remove('show'));
     app.querySelectorAll('[data-lb]').forEach(img => img.addEventListener('click', () => abrirLb(img.dataset.lb)));
 
@@ -587,13 +579,13 @@
 
     // Diagnóstico: abre el link con &debug=1 para ver exactamente qué datos manda el servidor.
     if(new URLSearchParams(location.search).get('debug')){
-      const crudo = JSON.stringify({ paciente: data.paciente, resumen: data.resumen, visitas: data.visitas }, (k, val) => typeof val === 'string' && val.length > 140 ? val.slice(0, 140) + '…' : val, 2);
-      document.getElementById('panelComprobante').insertAdjacentHTML('beforeend', '<pre style="font-size:11px;white-space:pre-wrap;background:var(--cream);padding:10px;border-radius:8px;">' + esc(crudo) + '</pre>');
+      const crudo = JSON.stringify({ paciente: data.paciente, citasPendientes: data.citasPendientes, visitas: data.visitas }, (k, val) => typeof val === 'string' && val.length > 140 ? val.slice(0, 140) + '…' : val, 2);
+      document.getElementById('panelHistorial').insertAdjacentHTML('beforeend', '<pre style="font-size:11px;white-space:pre-wrap;background:var(--cream);padding:10px;border-radius:8px;">' + esc(crudo) + '</pre>');
     }
   }
 
   function cambiarTab(nombre){
-    ['Receta','Comprobante'].forEach(n => {
+    ['Historial','Visitas','Receta'].forEach(n => {
       document.getElementById('tab'+n).classList.toggle('active', n === nombre);
       document.getElementById('panel'+n).classList.toggle('active', n === nombre);
     });
